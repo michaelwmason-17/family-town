@@ -163,6 +163,14 @@
       const reg = await navigator.serviceWorker.getRegistration('/'), sub = reg && await reg.pushManager.getSubscription();
       if (sub) await CTX.sb.from('push_subs').update({ prefs }).eq('endpoint', sub.endpoint);
     },
+    async chef(payload) {   // the Chef (api/chef.js): ideas, pantry, and recipe screenshots
+      const { data } = CTX ? await CTX.sb.auth.getSession() : { data: null }, tok = data && data.session && data.session.access_token;
+      if (!tok) throw Object.assign(new Error('Sign in first'), { code: 'unavailable' });
+      const r = await fetch('/api/chef', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + tok }, body: JSON.stringify(payload) });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw Object.assign(new Error(j.error || 'The Chef could not answer.'), { code: j.code || 'error' });
+      return j;
+    },
     async notify(payload) {
       if (!CTX) return;
       const { data } = await CTX.sb.auth.getSession(), tok = data && data.session && data.session.access_token;

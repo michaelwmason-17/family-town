@@ -151,6 +151,11 @@
   .pill.none { background:transparent; border:1px solid var(--a-line); color:var(--a-soft); }
   .pill.warn { background:#f8e0d8; color:#b0442c; }
   .food-row { border-top:1px solid var(--a-line); }
+  .dd { display:inline-block; font-size:13px; font-weight:700; color:#eb1700; text-decoration:none; padding:6px 0; }
+  .idea { border-top:1px solid var(--a-line); padding:12px 0; }
+  .recipe-body { padding:0 0 14px; }
+  .recipe-list { margin:0; padding-left:20px; line-height:1.55; }
+  textarea.in { resize:vertical; font:inherit; }
   .food-main { display:flex; align-items:center; gap:10px; width:100%; background:none; border:none; color:inherit; font:inherit; padding:10px 0; cursor:pointer; min-height:48px; }
   .food-dot { width:24px; height:24px; border-radius:50%; border:2px solid var(--a-line); display:grid; place-items:center; font-size:13px; font-weight:900; color:#fff; flex:none; }
   .food-dot.on { background:var(--a-kelp); border-color:var(--a-kelp); }
@@ -516,7 +521,7 @@ async function flushKey(k) {
 }
 // Lists where both of you add items (chat, calendar, chores) merge item by item instead of
 // last-write-wins, so two things added at the same moment both survive.
-const MERGE_KEYS = { photolog: p => p.id, bcomments: c => c.id, notes: n => n.id, events: e => e.id, chorelog: e => `${e.at}|${e.id}|${e.by}`, bigGoals: g => g.id, goals: g => g.id, prayers: p => p.id, foods: e => e.id };
+const MERGE_KEYS = { photolog: p => p.id, bcomments: c => c.id, notes: n => n.id, events: e => e.id, chorelog: e => `${e.at}|${e.id}|${e.by}`, bigGoals: g => g.id, goals: g => g.id, prayers: p => p.id, foods: e => e.id, recipes: r => r.id, dinnerlog: e => e.id };
 const tomb = {};                // item keys deleted on this phone, so a merge doesn't bring them back
 const recent = {};              // item keys this phone added in the last minute
 function noteAdded(k, item) { (recent[k] = recent[k] || new Map()).set(MERGE_KEYS[k](item), Date.now()); }
@@ -2476,6 +2481,8 @@ const DQ_POOL = [
   { id: 'hi', ev: 'newbest', n: 1, kind: 'game', text: 'Beat your best score in any game this week' },
   // real life
   { id: 'food', ev: 'food', n: 1, kind: 'life', text: 'Log a food Margo tried' },
+  { id: 'made', ev: 'made', n: 1, kind: 'life', text: 'Log a dinner you made' },
+  { id: 'recipe', ev: 'recipe', n: 1, kind: 'life', text: 'Save a new recipe' },
   { id: 'chores2', ev: 'chore', n: 2, kind: 'life', text: 'Do 2 real chores' },
   { id: 'note', ev: 'note', n: 1, kind: 'life', text: 'Send {them} a sweet message' },
   { id: 'photo', ev: 'dphoto', n: 1, kind: 'life', text: 'Take a daily photo' },
@@ -3955,6 +3962,178 @@ function foodCsv() {
   a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' })); a.download = `margo-first-foods-${dateKey(new Date())}.csv`; document.body.appendChild(a); a.click(); a.remove();
 }
 
+
+// ---------- Meals: the week's plan, a recipe box, a dinner log, and a Chef helper (ideas, "what I have", screenshot import) ----------
+const recipes = () => load('recipes', []);
+const dinnerLog = () => load('dinnerlog', []);
+const MADE_RATES = [['again', '❤️ Make again'], ['fine', '🙂 It was fine'], ['skip', '👎 Skip next time']];
+let mealsTab = 'plan', chef = { state: 'idle', kind: null, ideas: [], msg: '', pantry: '' }, recipeOpen = null, recipeEdit = null, madeSheet = null;
+const doordash = t => `https://www.doordash.com/search/store/${encodeURIComponent(String(t).replace(/\//g, ' ').trim())}/`;
+const toLines = s => String(s || '').split(/\n+/).map(x => x.replace(/^\s*(?:[-*•]|\d+[.)])\s*/, '').trim()).filter(Boolean);
+function saveRecipe(r) {
+  const isNew = !r.id, rec = { id: r.id || uid(), title: r.title.trim().slice(0, 80), ingredients: (r.ingredients || []).slice(0, 60), steps: (r.steps || []).slice(0, 40), minutes: r.minutes || null, servings: r.servings || null, source: r.source || '', notes: r.notes || '', by: r.by ?? active, at: r.at || Date.now() };
+  const list = recipes().filter(x => x.id !== rec.id); mem.recipes = [...list, rec]; if (isNew) noteAdded('recipes', rec); save('recipes');
+  if (isNew) { capAward('recipe', 9, 3); track('recipe'); }
+  return rec;
+}
+function logDinner(dish, recipeId, rate, note, date) {
+  const e = { id: uid(), dish: dish.trim().slice(0, 80), recipeId: recipeId || null, rate: rate || 'again', note: note || '', date: date || dateKey(new Date()), by: active, at: Date.now() };
+  mem.dinnerlog = [...dinnerLog(), e].slice(-500); noteAdded('dinnerlog', e); save('dinnerlog');
+  const got = capAward('made', 5, 5); track('made');
+  return got;
+}
+const madeCount = title => dinnerLog().filter(e => e.dish.toLowerCase() === String(title).toLowerCase()).length;
+function planOnDay(dish, ingredients, day) {
+  const m = mealPlan(), isNew = !m.days[day]; m.days[day] = { dish, ingredients: (ingredients || []).join(', ').slice(0, 300) }; save('meals');
+  if (isNew) { capAward('meal', 9, 3); track('meal'); }
+}
+
+// ----- the Chef: Claude when it's available, built-in ideas when it isn't -----
+const CHEF_SCHEMA = { type: 'object', additionalProperties: false, required: ['ideas'], properties: { ideas: { type: 'array', items: { type: 'object', additionalProperties: false,
+  required: ['title', 'why', 'minutes', 'ingredients', 'steps', 'uses', 'missing'],
+  properties: { title: { type: 'string' }, why: { type: 'string' }, minutes: { type: 'integer' }, ingredients: { type: 'array', items: { type: 'string' } }, steps: { type: 'array', items: { type: 'string' } }, uses: { type: 'array', items: { type: 'string' } }, missing: { type: 'array', items: { type: 'string' } } } } } } };
+const RECIPE_SCHEMA = { type: 'object', additionalProperties: false, required: ['title', 'servings', 'minutes', 'ingredients', 'steps', 'notes'],
+  properties: { title: { type: 'string' }, servings: { type: 'integer' }, minutes: { type: 'integer' }, ingredients: { type: 'array', items: { type: 'string' } }, steps: { type: 'array', items: { type: 'string' } }, notes: { type: 'string' } } };
+function chefContext() {
+  const recent = dinnerLog().slice(-14).map(e => e.dish), liked = dinnerLog().filter(e => e.rate === 'again').map(e => e.dish), disliked = dinnerLog().filter(e => e.rate === 'skip').map(e => e.dish);
+  return { recent: [...new Set(recent)].slice(-10), liked: [...new Set(liked)].slice(-10), disliked: [...new Set(disliked)].slice(-10), saved: recipes().map(r => r.title).slice(-25) };
+}
+function chefPrompt(kind, input) {
+  const c = chefContext();
+  const family = 'You plan weeknight dinners for a young family in Monterey, California: two parents and a baby girl (about 7 months, just starting solids). Favor realistic, healthy, family-friendly dinners that take 45 minutes or less, use ordinary grocery-store ingredients, and where a soft, unsalted portion could be set aside for the baby. Give ingredient amounts.';
+  const ctx = `Recently made: ${c.recent.join(', ') || 'nothing logged yet'}. They loved: ${c.liked.join(', ') || 'unknown'}. Not a hit: ${c.disliked.join(', ') || 'none'}. Saved recipes: ${c.saved.join(', ') || 'none'}.`;
+  if (kind === 'ideas') return `${family}\n${ctx}\nSuggest 5 varied dinner ideas they haven't made recently. "why" is one short friendly sentence. Leave "uses" and "missing" empty. Keep steps to 4-8 short steps.`;
+  if (kind === 'pantry') return `${family}\n${ctx}\nThis is what they have on hand: ${input}\nSuggest 3 dinners that use mostly these. In "uses" list what they have that the dish uses; in "missing" list only the few extra things they'd need to buy (assume salt, pepper, oil, and water are on hand). "why" is one short sentence. Keep steps to 4-8 short steps.`;
+  return `Read this recipe (from a screenshot or pasted text) and return it cleanly: title, servings, minutes (total time, 0 if unknown), every ingredient with its amount as written, and the steps in order (one step per item). "notes" holds any useful tips from the source, or an empty string. If no recipe is present, return an empty title.${input ? `\n\nRecipe text:\n${input.slice(0, 8000)}` : ''}`;
+}
+async function chefAsk(kind, input, imageBlob) {
+  const schema = kind === 'parse' ? RECIPE_SCHEMA : CHEF_SCHEMA;
+  // On the website: the family's own /api/chef function (needs ANTHROPIC_API_KEY in Vercel)
+  if (window.FT_WEB && FT_WEB.chef) {
+    let image = null;
+    if (imageBlob) image = await new Promise(res => { const fr = new FileReader(); fr.onload = () => res(String(fr.result).split(',')[1]); fr.readAsDataURL(imageBlob); });
+    return FT_WEB.chef({ kind, prompt: chefPrompt(kind, input), image, mediaType: imageBlob ? imageBlob.type || 'image/jpeg' : null });
+  }
+  // In the Claude app: ask Claude directly
+  const sample = window.claude && window.claude.use ? await window.claude.use('sample') : null;
+  if (!sample) throw Object.assign(new Error('no chef'), { code: 'unavailable' });
+  const opts = { modelTier: 'default' };
+  if (imageBlob) { const lim = sample.limits ? await sample.limits() : { images: true }; if (!lim.images) throw Object.assign(new Error('no images'), { code: 'unavailable' }); opts.images = [imageBlob]; }
+  return sample.json(`${chefPrompt(kind, input)}\n\nReply with only JSON matching this schema: ${JSON.stringify(schema)}`, opts);
+}
+function localIdeas(kind, pantry) {
+  const pool = [...DINNER_IDEAS.map(([t, ing]) => ({ title: t, ingredients: ing.split(',').map(s => s.trim()), steps: [] })), ...recipes().map(r => ({ title: r.title, ingredients: r.ingredients, steps: r.steps }))];
+  const recent = new Set(dinnerLog().slice(-10).map(e => e.dish.toLowerCase()));
+  if (kind === 'pantry') {
+    const have = String(pantry).toLowerCase().split(/[,\n]+|\band\b/).map(s => s.trim()).filter(s => s.length > 1);
+    return pool.map(p => { const uses = p.ingredients.filter(i => have.some(h => i.toLowerCase().includes(h) || h.includes(i.toLowerCase().split(' ').pop()))), missing = p.ingredients.filter(i => !uses.includes(i));
+      return { ...p, uses, missing, why: uses.length ? `Uses your ${uses.slice(0, 3).join(', ').toLowerCase()}.` : '', minutes: 30 }; }).filter(p => p.uses.length).sort((a, b) => b.uses.length - a.uses.length || a.missing.length - b.missing.length).slice(0, 4);
+  }
+  return pool.filter(p => !recent.has(p.title.toLowerCase())).sort(() => Math.random() - .5).slice(0, 5).map(p => ({ ...p, why: 'From your recipe box and family favorites.', minutes: 30, uses: [], missing: [] }));
+}
+async function runChef(kind, pantry) {
+  chef = { state: 'busy', kind, ideas: [], msg: '', pantry: pantry || chef.pantry };
+  renderApp();
+  try {
+    const out = await chefAsk(kind, pantry);
+    chef.ideas = (out && out.ideas) || []; chef.state = 'done'; chef.ai = true;
+    if (!chef.ideas.length) { chef.ideas = localIdeas(kind, pantry); chef.ai = false; }
+  } catch (e) {
+    chef.ideas = localIdeas(kind, pantry); chef.state = 'done'; chef.ai = false;
+    chef.msg = e && e.code === 'not_set_up' ? 'Smart Chef ideas turn on once the AI key is added in Vercel. Here are ideas from your recipe box for now.' : e && e.code === 'unavailable' ? 'Here are ideas from your recipe box and family favorites.' : "The Chef couldn't connect just now. Here are some built-in ideas.";
+    if (kind === 'pantry' && !chef.ideas.length) chef.msg += " Nothing matched yet. Try listing a few more things you have.";
+  }
+  if (appOpen) renderApp();
+}
+async function importRecipeShot(file) {
+  appToast('Reading the recipe...'); recipeEdit = { title: '', ingredients: '', steps: '', reading: true }; mealsTab = 'recipes'; renderApp();
+  try {
+    const pic = await resizeToBlob(file, 1600), r = await chefAsk('parse', '', pic.blob);
+    if (!r || !r.title) throw Object.assign(new Error('none'), { code: 'empty' });
+    recipeEdit = { title: r.title, ingredients: (r.ingredients || []).join('\n'), steps: (r.steps || []).join('\n'), minutes: r.minutes || '', servings: r.servings || '', notes: r.notes || '', imported: true };
+    appToast('Got it! Check it over, then save.');
+  } catch (e) {
+    recipeEdit = { title: '', ingredients: '', steps: '', msg: e && e.code === 'empty' ? "I couldn't find a recipe in that picture. Try a clearer screenshot, or type it in." : e && (e.code === 'not_set_up' || e.code === 'unavailable') ? 'Reading screenshots needs the AI key in Vercel. You can type or paste the recipe here for now.' : "That screenshot couldn't be read just now. Try again, or type it in." };
+  }
+  renderApp();
+}
+
+// ----- screens -----
+const ideaCard = (it, i) => `<div class="idea"><div class="row2" style="justify-content:space-between; align-items:flex-start"><div><div style="font-weight:800">${esc(it.title)}</div><div class="muted2" style="font-size:13px">${it.minutes ? it.minutes + ' min &middot; ' : ''}${esc(it.why || '')}</div></div></div>
+  ${it.missing && it.missing.length ? `<div class="muted2" style="font-size:13px; margin-top:4px"><b>Need:</b> ${esc(it.missing.join(', '))}</div>` : ''}
+  <div class="row2" style="margin-top:8px; flex-wrap:wrap"><button class="btn sm" data-act="ideaplan" data-i="${i}">Plan it</button><button class="btn ghost sm" data-act="ideasave" data-i="${i}">Save recipe</button>${(it.missing && it.missing.length) || (it.ingredients && it.ingredients.length) ? `<button class="btn ghost sm" data-act="ideagroc" data-i="${i}">${it.missing && it.missing.length ? 'Add what I need' : 'Add to groceries'}</button>` : ''}</div></div>`;
+function chefCard() {
+  return `<section class="card chef-card"><div class="card-h"><span class="eyebrow">Ask the Chef</span>${chef.state === 'done' ? '<button class="link" data-act="chefclear">Clear</button>' : ''}</div>
+    <div class="row2" style="flex-wrap:wrap"><button class="btn" data-act="chefideas" ${chef.state === 'busy' ? 'disabled' : ''}>💡 Give me ideas</button></div>
+    <form class="stack2" data-form="pantry" style="margin-top:12px"><label class="muted2" for="pantryIn">This is what I have, help me make something:</label>
+      <textarea class="in" id="pantryIn" name="have" rows="2" maxlength="400" placeholder="Chicken thighs, half a bag of spinach, rice, lemons, feta">${esc(chef.pantry || '')}</textarea><button class="btn ghost" ${chef.state === 'busy' ? 'disabled' : ''}>Help me cook</button></form>
+    ${chef.state === 'busy' ? '<p class="muted2" style="margin:12px 0 0">The Chef is thinking...</p>' : ''}
+    ${chef.msg ? `<p class="muted2" style="margin:12px 0 0">${esc(chef.msg)}</p>` : ''}
+    ${chef.state === 'done' ? `<div style="margin-top:10px">${chef.ideas.map(ideaCard).join('') || '<p class="empty">No ideas yet.</p>'}</div>` : ''}</section>`;
+}
+function madeForm() {
+  const s = madeSheet || {};
+  return `<section class="card" id="madeForm"><div class="card-h"><span class="eyebrow">We made it!</span><button class="link" data-act="madecancel">Cancel</button></div>
+    <form class="stack2" data-form="made"><input class="in" name="dish" maxlength="80" value="${esc(s.dish || '')}" placeholder="Fish tacos" aria-label="What you made">
+      <div class="chips">${MADE_RATES.map(([k, l], i) => `<label class="chip ${(s.rate || 'again') === k ? 'on' : ''}"><input type="radio" name="rate" value="${k}" ${(s.rate || 'again') === k ? 'checked' : ''} hidden>${l}</label>`).join('')}</div>
+      <input class="in" name="note" maxlength="140" placeholder="Note (doubled the garlic, Margo loved the rice)" aria-label="Note">
+      <input type="hidden" name="rid" value="${esc(s.recipeId || '')}"><input class="in" name="date" type="date" value="${s.date || dateKey(new Date())}" max="${dateKey(new Date())}" aria-label="Date">
+      <button class="btn">Add to the dinner log</button></form></section>`;
+}
+function recipeForm() {
+  const r = recipeEdit;
+  return `<section class="card" id="recipeForm"><div class="card-h"><span class="eyebrow">${r.id ? 'Edit recipe' : r.imported ? 'Imported: check it over' : 'New recipe'}</span><button class="link" data-act="recipecancel">Cancel</button></div>
+    ${r.reading ? '<p class="muted2" style="margin:0">Reading your screenshot...</p>' : `${r.msg ? `<p class="muted2" style="margin:0 0 10px">${esc(r.msg)}</p>` : ''}
+    <form class="stack2" data-form="recipe"><input type="hidden" name="id" value="${esc(r.id || '')}">
+      <input class="in" name="title" maxlength="80" value="${esc(r.title || '')}" placeholder="Grandma's enchiladas" aria-label="Recipe name">
+      <div class="row2"><input class="in" name="minutes" type="number" inputmode="numeric" min="0" max="999" value="${esc(r.minutes || '')}" placeholder="Minutes" aria-label="Minutes"><input class="in" name="servings" type="number" inputmode="numeric" min="0" max="50" value="${esc(r.servings || '')}" placeholder="Serves" aria-label="Servings"></div>
+      <label class="muted2">Ingredients (one per line)</label><textarea class="in" name="ingredients" rows="6" placeholder="2 lb chicken thighs&#10;1 onion, diced">${esc(r.ingredients || '')}</textarea>
+      <label class="muted2">Steps (one per line)</label><textarea class="in" name="steps" rows="6" placeholder="Brown the chicken.&#10;Add the onion...">${esc(r.steps || '')}</textarea>
+      <input class="in" name="source" maxlength="300" value="${esc(r.source || '')}" placeholder="Link (optional)" aria-label="Link">
+      <input class="in" name="notes" maxlength="300" value="${esc(r.notes || '')}" placeholder="Notes (optional)" aria-label="Notes">
+      <button class="btn">Save recipe</button></form>`}</section>`;
+}
+function recipeDetail(r) {
+  return `<div class="recipe-body">${r.minutes || r.servings ? `<div class="muted2" style="margin-bottom:6px">${r.minutes ? r.minutes + ' min' : ''}${r.minutes && r.servings ? ' &middot; ' : ''}${r.servings ? 'serves ' + r.servings : ''}</div>` : ''}
+    <div class="eyebrow" style="margin:6px 0">Ingredients</div><ul class="recipe-list">${r.ingredients.map(x => `<li>${esc(x)}</li>`).join('')}</ul>
+    ${r.steps.length ? `<div class="eyebrow" style="margin:10px 0 6px">Steps</div><ol class="recipe-list">${r.steps.map(x => `<li>${esc(x)}</li>`).join('')}</ol>` : ''}
+    ${r.notes ? `<p class="muted2">${esc(r.notes)}</p>` : ''}${r.source && /^https?:\/\//.test(r.source) ? `<p><a href="${esc(r.source)}" target="_blank" rel="noopener">Original recipe</a></p>` : ''}
+    <div class="row2" style="flex-wrap:wrap; margin-top:10px"><button class="btn sm" data-act="recplan" data-id="${r.id}">Plan it</button><button class="btn ghost sm" data-act="recgroc" data-id="${r.id}">Add to groceries</button><button class="btn ghost sm" data-act="recmade" data-id="${r.id}">We made it</button><button class="btn ghost sm" data-act="recedit" data-id="${r.id}">Edit</button><button class="link" data-act="recdel" data-id="${r.id}" style="color:var(--a-soft)">Delete</button></div></div>`;
+}
+function dayPicker(act, extra) {
+  const ti = todayIdx();
+  return `<div class="chips" style="margin-top:8px">${Array.from({ length: 7 }, (_, i) => i).filter(i => i >= ti).map(i => `<button class="chip" data-act="${act}" data-day="${i}" ${extra}>${i === ti ? 'Tonight' : weekDay(i).toLocaleDateString('en-US', { weekday: 'short' })}</button>`).join('')}</div>`;
+}
+let pickDayFor = null;   // { kind: 'idea'|'recipe', i|id }
+function mealsScreen() {
+  const segs = [['plan', 'This week'], ['recipes', `Recipes (${recipes().length})`], ['made', 'Dinner log']];
+  const seg = `<div class="seg" style="margin-bottom:12px">${segs.map(([k, l]) => `<button class="chip ${mealsTab === k ? 'on' : ''}" data-act="mealstab" data-k="${k}">${l}</button>`).join('')}</div>`;
+  const picker = pickDayFor ? `<section class="card"><div class="card-h"><span class="eyebrow">Which night?</span><button class="link" data-act="pickcancel">Cancel</button></div><div style="font-weight:800">${esc(pickDayFor.title)}</div>${dayPicker('pickday', '')}</section>` : '';
+  let body = '';
+  if (mealsTab === 'recipes') {
+    const list = recipes().slice().sort((a, b) => a.title.localeCompare(b.title));
+    body = `${recipeEdit ? recipeForm() : `<section class="card"><div class="card-h"><span class="eyebrow">Add a recipe</span></div>
+        <div class="row2" style="flex-wrap:wrap"><label class="btn" style="cursor:pointer">📷 From a screenshot<input type="file" accept="image/*" hidden data-recipeshot="1"></label><button class="btn ghost" data-act="recnew">Type or paste it</button></div>
+        <p class="muted2" style="margin:10px 0 0; font-size:13px">Screenshot a recipe from Instagram, a website, or a cookbook, and the Chef fills it in for you.</p></section>`}
+      <section class="card"><div class="card-h"><span class="eyebrow">Recipe box</span><span class="muted2">${list.length}</span></div>
+        ${list.map(r => `<div class="food-row"><button class="food-main" data-act="recopen" data-id="${r.id}"><span style="flex:1; text-align:left"><b>${esc(r.title)}</b><br><span class="muted2" style="font-size:13px">${r.minutes ? r.minutes + ' min &middot; ' : ''}${madeCount(r.title) ? `made ${madeCount(r.title)}&times;` : 'not made yet'}</span></span><span class="muted2">${recipeOpen === r.id ? '&#9662;' : '&#9656;'}</span></button>${recipeOpen === r.id ? recipeDetail(r) : ''}</div>`).join('') || '<p class="empty">No recipes yet. Add one from a screenshot, or save an idea from the Chef.</p>'}</section>`;
+  } else if (mealsTab === 'made') {
+    const log = dinnerLog().slice().sort((a, b) => (b.date || '').localeCompare(a.date || '') || b.at - a.at), counts = {};
+    for (const e of log) counts[e.dish] = (counts[e.dish] || 0) + 1;
+    const favs = Object.keys(counts).filter(d => log.some(e => e.dish === d && e.rate === 'again')).sort((a, b) => counts[b] - counts[a]).slice(0, 8);
+    body = `${madeSheet ? madeForm() : `<section class="card"><div class="row2" style="justify-content:space-between"><div><div class="big-num" style="font-size:28px">${log.length}</div><div class="muted2">dinners made</div></div><button class="btn" data-act="madenew">We made dinner</button></div></section>`}
+      ${favs.length ? `<section class="card"><div class="card-h"><span class="eyebrow">Family favorites</span></div><div class="chips">${favs.map(d => `<button class="chip" data-act="favplan" data-d="${esc(d)}">${esc(d)} &middot; ${counts[d]}&times;</button>`).join('')}</div><p class="muted2" style="margin:8px 0 0; font-size:13px">Tap one to put it on this week's plan.</p></section>` : ''}
+      <section class="card"><div class="card-h"><span class="eyebrow">Dinner log</span></div>${log.slice(0, 40).map(e => `<div class="item"><div class="txt"><span>${esc(e.dish)}</span><div class="meta">${new Date(e.date + 'T12:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })} &middot; ${esc((MADE_RATES.find(r => r[0] === e.rate) || ['', ''])[1])}${e.note ? ' &middot; ' + esc(e.note) : ''}</div></div>${e.by === active ? `<button class="x" data-act="madedel" data-id="${e.id}" aria-label="Remove">&times;</button>` : ''}</div>`).join('') || '<p class="empty">Nothing logged yet. Tap "We made dinner" after you cook.</p>'}</section>`;
+  } else {
+    const m = mealPlan(), ti = todayIdx(), label = i => i === ti ? 'Tonight' : weekDay(i).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+    const loggedOn = d => dinnerLog().some(e => e.date === dateKey(weekDay(d)));
+    body = `${chefCard()}<section class="card"><div class="card-h"><span class="eyebrow">This week's dinners</span></div>${Array.from({ length: 7 }, (_, i) => { const d = m.days[i];
+        return `<div class="item"><div class="txt"><span>${label(i)}</span><div class="meta">${d ? esc(d.dish) : 'Nothing planned'}</div></div>${d && i <= ti && !loggedOn(i) ? `<button class="btn ghost sm" data-act="plannedmade" data-i="${i}">Made it</button>` : d && loggedOn(i) ? '<span class="pill ok">Made</span>' : ''}${d && d.ingredients ? `<button class="btn ghost sm" data-act="tolist" data-i="${i}">To list</button>` : ''}</div>`; }).join('')}</section>
+      <section class="card"><form class="stack2" data-form="meal"><span class="eyebrow">Plan a dinner yourself (+3)</span><select class="in" name="day" aria-label="Day">${Array.from({ length: 7 }, (_, i) => `<option value="${i}"${i === ti ? ' selected' : ''}>${label(i)}</option>`).join('')}</select><input class="in" name="dish" maxlength="40" placeholder="Fish tacos" aria-label="Dinner" list="recipeNames"><datalist id="recipeNames">${recipes().map(r => `<option value="${esc(r.title)}">`).join('')}</datalist><input class="in" name="ing" maxlength="140" placeholder="Tortillas, cod, cabbage, limes" aria-label="Ingredients"><button class="btn">Save dinner</button></form></section>`;
+  }
+  return seg + picker + body;
+}
+
 // ---------- A pick-one menu (riddles, seeds, yard sales) ----------
 let CHOICES = [];
 function choose(items) {   // items: [[label, fn], ...]
@@ -5368,7 +5547,7 @@ const TAB_RENDER = {
       ${checkinCard()}
       <section class="card"><div class="card-h"><span class="eyebrow">Today</span><button class="link" data-act="newev">+ Add</button></div>
         ${today.map(evCard).join('') || '<p class="empty">Nothing on the calendar today.</p>'}
-        ${dinner ? `<div class="care-line" style="margin-top:8px"><span class="care-l">Dinner</span><span class="muted2">${esc(dinner.dish)}</span></div>` : ''}
+        <div class="care-line" style="margin-top:8px"><span class="care-l">Dinner</span>${dinner ? `<span class="muted2">${esc(dinner.dish)}</span>` : '<button class="link" data-act="list" data-sub="dinners">Get ideas</button>'}</div>
         ${upcoming.length ? `<div class="eyebrow" style="margin:12px 0 6px">Coming up</div>${upcoming.map(([i, e]) => `<div class="meta muted2" style="margin-top:6px">${i === 1 ? 'Tomorrow' : addDays(i).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}</div>${evCard(e)}`).join('')}` : ''}</section>
       ${homeOn('quests') ? questsCard() : ''}
       ${homeOn('foods') ? foodsHomeCard() : ''}
@@ -5434,7 +5613,7 @@ const TAB_RENDER = {
   },
 
   lists() {
-    const segs = [['groceries', 'Groceries'], ['todos', 'To-dos'], ['chores', 'Chores'], ['foods', "Margo's food"], ['goals', 'Goals'], ['dinners', 'Dinners'], ['ideas', 'Outing ideas']];
+    const segs = [['groceries', 'Groceries'], ['todos', 'To-dos'], ['chores', 'Chores'], ['foods', "Margo's food"], ['goals', 'Goals'], ['dinners', 'Meals'], ['ideas', 'Outing ideas']];
     const seg = `<div class="seg">${segs.map(([k, l]) => `<button class="chip ${listTab === k ? 'on' : ''}" data-act="list" data-sub="${k}">${l}</button>`).join('')}</div>`;
     let body = '';
     if (listTab === 'chores') body = choresScreen() + petScheduleCard();
@@ -5443,7 +5622,7 @@ const TAB_RENDER = {
       const items = listItems('groceries').map((it, i) => [it, i]), open = items.filter(([it]) => !it.done), got = items.filter(([it]) => it.done);
       body = `<section class="card"><form class="row2" data-form="add" data-key="groceries"><input class="in" name="t" maxlength="60" placeholder="Avocados" aria-label="Add a grocery"><button class="btn">Add</button></form>
         <div class="chips" style="margin-top:10px">${STAPLES.map(s => `<button class="chip soft" data-act="staple" data-t="${esc(s)}">+ ${esc(s)}</button>`).join('')}</div></section>
-        <section class="card"><div class="card-h"><span class="eyebrow">To buy &middot; ${open.length}</span><span class="muted2">+3 per add, +2 when bought</span></div>${open.map(([it, i]) => itemRow('groceries', it, i)).join('') || '<p class="empty">The list is empty.</p>'}</section>
+        <section class="card"><div class="card-h"><span class="eyebrow">To buy &middot; ${open.length}</span><span class="muted2">+3 per add, +2 when bought</span></div>${open.map(([it, i]) => itemRow('groceries', it, i, `<a class="dd" href="${doordash(it.t)}" target="_blank" rel="noopener">Find on DoorDash</a>`)).join('') || '<p class="empty">The list is empty.</p>'}</section>
         ${got.length ? `<section class="card"><div class="card-h"><span class="eyebrow">In the cart &middot; ${got.length}</span><button class="link" data-act="clearlist" data-key="groceries">Clear</button></div>${got.map(([it, i]) => itemRow('groceries', it, i)).join('')}</section>` : ''}`;
     } else if (listTab === 'todos') {
       const items = listItems('quests').map((it, i) => [it, i]);
@@ -5459,10 +5638,7 @@ const TAB_RENDER = {
         ${goals.map(g => { const n = (g.prog || {})[periodKey(g.period)] || 0, hit = n >= g.target;
           return `<section class="card"><div class="goal-top"><div style="min-width:0"><div style="font-weight:800">${esc(g.t)}</div><div class="muted2">${n} of ${g.target} this ${g.period}${hit ? ' &middot; reached!' : ''}</div></div><div class="row2"><button class="btn ghost" data-act="goal" data-id="${g.id}" data-d="-1" aria-label="Minus one">&minus;</button><button class="btn" data-act="goal" data-id="${g.id}" data-d="1">+1</button></div></div><div class="bar2"><i style="width:${Math.min(100, Math.round(n / g.target * 100))}%"></i></div><button class="link" data-act="delgoal" data-id="${g.id}" style="margin-top:8px; color:var(--a-soft)">Remove</button></section>`; }).join('') || '<section class="card"><p class="empty">Weekly or monthly goals, like "Date night 2 times a month" or "Walk the rec trail 3 times a week."</p></section>'}`;
     } else if (listTab === 'dinners') {
-      const m = mealPlan(), ti = todayIdx(), label = i => i === ti ? 'Tonight' : weekDay(i).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-      body = `<section class="card"><div class="card-h"><span class="eyebrow">This week's dinners</span></div>${Array.from({ length: 7 }, (_, i) => { const d = m.days[i];
-          return `<div class="item"><div class="txt"><span>${label(i)}</span><div class="meta">${d ? esc(d.dish) + (d.ingredients ? ' &middot; ' + esc(d.ingredients) : '') : 'Nothing planned'}</div></div>${d && d.ingredients ? `<button class="btn ghost" data-act="tolist" data-i="${i}">To list</button>` : ''}</div>`; }).join('')}</section>
-        <section class="card"><form class="stack2" data-form="meal"><span class="eyebrow">Plan a dinner (+3)</span><select class="in" name="day" aria-label="Day">${Array.from({ length: 7 }, (_, i) => `<option value="${i}"${i === ti ? ' selected' : ''}>${label(i)}</option>`).join('')}</select><input class="in" name="dish" maxlength="40" placeholder="Fish tacos" aria-label="Dinner"><input class="in" name="ing" maxlength="140" placeholder="Tortillas, cod, cabbage, limes" aria-label="Ingredients"><button class="btn">Save dinner</button></form></section>`;
+      body = mealsScreen();
     } else {
       const items = listItems('outings').map((it, i) => [it, i]);
       body = `<section class="card"><form class="row2" data-form="add" data-key="outings"><input class="in" name="t" maxlength="60" placeholder="Tide pools at Asilomar" aria-label="Outing idea"><button class="btn">Add</button></form><p class="muted2" style="margin:8px 0 0">+15 when you actually go.</p></section>
@@ -5509,7 +5685,8 @@ function recapScreen(w) {
   const chores = choreLog().filter(e => days.includes(e.day) && CHORES[e.id] && !CHORES[e.id].care).length, missions = missionState().done.filter(d => d.week === w).length;
   const evs = load('events', []).filter(e => days.includes(e.date)).length;
   const newFoods = (() => { const firsts = {}; for (const e of foodLog()) firsts[e.food] = Math.min(firsts[e.food] || Infinity, e.at); return Object.values(firsts).filter(t => days.includes(dateKey(new Date(t)))).length; })();
-  const lines = [newFoods && `Margo tried ${newFoods} new food${newFoods === 1 ? '' : 's'}`, chores && `${chores} chores done around the house`, missions && `${missions} mission${missions === 1 ? '' : 's'} finished together`, evs && `${evs} thing${evs === 1 ? '' : 's'} on the calendar`, pics.length && `${pics.length} photo${pics.length === 1 ? '' : 's'} of your life together`, ciDays.length && `${ciDays.length} day${ciDays.length === 1 ? '' : 's'} of check-ins`].filter(Boolean);
+  const dinnersMade = dinnerLog().filter(e => days.includes(e.date)).length;
+  const lines = [dinnersMade && `${dinnersMade} dinner${dinnersMade === 1 ? '' : 's'} cooked at home`, newFoods && `Margo tried ${newFoods} new food${newFoods === 1 ? '' : 's'}`, chores && `${chores} chores done around the house`, missions && `${missions} mission${missions === 1 ? '' : 's'} finished together`, evs && `${evs} thing${evs === 1 ? '' : 's'} on the calendar`, pics.length && `${pics.length} photo${pics.length === 1 ? '' : 's'} of your life together`, ciDays.length && `${ciDays.length} day${ciDays.length === 1 ? '' : 's'} of check-ins`].filter(Boolean);
   const win = h.winner, cheer = win < 0 ? 'A tie! The crown stays where it is. What a team.' : `${nm(win)} wears the crown this week! ${nm(1 - win)}, you were amazing too.`;
   const nextMon = weekKey(), focus = load('weekFocus', {});
   return `<section class="card recap-hero"><div class="eyebrow">Week in review &middot; ${range}</div>
@@ -6098,6 +6275,27 @@ function onAppClick(e) {
     case 'foodopen': foodOpen = foodOpen === d.id ? null : d.id; renderApp(); break;
     case 'fooddel': { const e2 = foodLog().find(x => x.id === d.id); if (e2) { noteRemoved('foods', e2); mem.foods = foodLog().filter(x => x.id !== d.id); save('foods'); } renderApp(); break; }
     case 'foodcsv': foodCsv(); break;
+    case 'mealstab': mealsTab = d.k; recipeOpen = null; pickDayFor = null; renderApp(); break;
+    case 'chefideas': runChef('ideas'); break;
+    case 'chefclear': chef = { state: 'idle', ideas: [], msg: '', pantry: '' }; renderApp(); break;
+    case 'ideaplan': { const it = chef.ideas[+d.i]; if (it) { pickDayFor = { title: it.title, ingredients: it.ingredients || [] }; renderApp(); $('appMain').scrollTop = 0; } break; }
+    case 'ideasave': { const it = chef.ideas[+d.i]; if (it) { if (recipes().some(r => r.title.toLowerCase() === it.title.toLowerCase())) { appToast('Already in your recipe box'); break; } saveRecipe({ title: it.title, ingredients: it.ingredients || [], steps: it.steps || [], minutes: it.minutes, notes: it.why || '' }); appToast(`Saved ${it.title} to your recipes`); renderApp(); } break; }
+    case 'ideagroc': { const it = chef.ideas[+d.i]; if (it) { const n = addToGroceries((it.missing && it.missing.length ? it.missing : it.ingredients) || []); appToast(n ? `${n} added to groceries` : 'Already on the list'); renderApp(); } break; }
+    case 'pickday': { if (pickDayFor) { planOnDay(pickDayFor.title, pickDayFor.ingredients, +d.day); appToast(`${pickDayFor.title} is on the plan`); pickDayFor = null; mealsTab = 'plan'; renderApp(); } break; }
+    case 'pickcancel': pickDayFor = null; renderApp(); break;
+    case 'recnew': recipeEdit = { title: '', ingredients: '', steps: '' }; renderApp(); break;
+    case 'recipecancel': recipeEdit = null; renderApp(); break;
+    case 'recopen': recipeOpen = recipeOpen === d.id ? null : d.id; renderApp(); break;
+    case 'recplan': { const r = recipes().find(x => x.id === d.id); if (r) { pickDayFor = { title: r.title, ingredients: r.ingredients }; renderApp(); $('appMain').scrollTop = 0; } break; }
+    case 'recgroc': { const r = recipes().find(x => x.id === d.id); if (r) { const n = addToGroceries(r.ingredients); appToast(n ? `${n} added to groceries` : 'Already on the list'); } break; }
+    case 'recmade': { const r = recipes().find(x => x.id === d.id); if (r) { madeSheet = { dish: r.title, recipeId: r.id }; mealsTab = 'made'; renderApp(); $('appMain').scrollTop = 0; } break; }
+    case 'recedit': { const r = recipes().find(x => x.id === d.id); if (r) { recipeEdit = { ...r, ingredients: r.ingredients.join('\n'), steps: r.steps.join('\n') }; renderApp(); $('appMain').scrollTop = 0; } break; }
+    case 'recdel': { const r = recipes().find(x => x.id === d.id); if (r) { noteRemoved('recipes', r); mem.recipes = recipes().filter(x => x.id !== d.id); save('recipes'); appToast('Recipe deleted', () => { mem.recipes = [...recipes(), r]; save('recipes'); }); renderApp(); } break; }
+    case 'madenew': madeSheet = {}; renderApp(); break;
+    case 'madecancel': madeSheet = null; renderApp(); break;
+    case 'madedel': { const e2 = dinnerLog().find(x => x.id === d.id); if (e2) { noteRemoved('dinnerlog', e2); mem.dinnerlog = dinnerLog().filter(x => x.id !== d.id); save('dinnerlog'); } renderApp(); break; }
+    case 'favplan': { const r = recipes().find(x => x.title.toLowerCase() === d.d.toLowerCase()); pickDayFor = { title: d.d, ingredients: r ? r.ingredients : [] }; renderApp(); $('appMain').scrollTop = 0; break; }
+    case 'plannedmade': { const pd = mealPlan().days[+d.i]; if (pd) { const r = recipes().find(x => x.title.toLowerCase() === pd.dish.toLowerCase()); madeSheet = { dish: pd.dish, recipeId: r ? r.id : null, date: dateKey(weekDay(+d.i)) }; mealsTab = 'made'; renderApp(); $('appMain').scrollTop = 0; } break; }
     case 'ciopen': ciOpen = !ciOpen; renderApp(); break;
     case 'quick': quickMode = d.m; renderApp(); break;
     case 'homecard': { const h = store.get('homeHide', []); store.set('homeHide', h.includes(d.k) ? h.filter(x => x !== d.k) : [...h, d.k]); renderApp(); break; }
@@ -6194,6 +6392,18 @@ function onAppSubmit(e) {
       const nm = titleCase(v('name')); if (!allFoods().some(x => x.name.toLowerCase() === nm.toLowerCase())) { mem.foodsCustom = [...customFoods(), { id: 'c-' + nm.toLowerCase().replace(/[^a-z]+/g, '-'), name: nm, cat: 'other', tip: 'flavor', allergen: null }]; save('foodsCustom'); }
       appToast(`${nm} added to the library`); break;
     }
+    case 'pantry': { const have = v('have'); if (!have) { appToast('List a few things you have first'); return; } runChef('pantry', have); return; }
+    case 'recipe': {
+      if (!v('title')) { appToast('Give the recipe a name'); return; }
+      const old = v('id') ? recipes().find(x => x.id === v('id')) : null;
+      const r = saveRecipe({ ...(old || {}), id: v('id') || null, title: v('title'), ingredients: toLines(v('ingredients')), steps: toLines(v('steps')), minutes: +v('minutes') || null, servings: +v('servings') || null, source: v('source'), notes: v('notes') });
+      recipeEdit = null; recipeOpen = r.id; appToast(old ? 'Recipe updated' : 'Recipe saved'); break;
+    }
+    case 'made': {
+      if (!v('dish')) { appToast('What did you make?'); return; }
+      const got = logDinner(v('dish'), v('rid'), (f.querySelector('input[name=rate]:checked') || {}).value, v('note'), v('date'));
+      madeSheet = null; appToast(`Added to the dinner log${got ? ' · +' + got : ''}`); break;
+    }
     case 'meal': {
       if (!v('dish')) return;
       const m = mealPlan(), day = +v('day'), isNew = !m.days[day];
@@ -6254,7 +6464,8 @@ function onAppChange(e) {
     resizeToBlob(e.target.files[0], 200).then(pic => { const fc = faces(); fc[active] = pic.dataUrl; mem.faces = fc; save('faces'); renderApp(); appToast('Photo saved'); }).catch(() => appToast("That photo couldn't be read."));
     return;
   }
-  if (e.target.name === 'like' || e.target.name === 'react') { e.target.closest('.chips').querySelectorAll('.chip').forEach(l => l.classList.toggle('on', l.querySelector('input').checked)); return; }
+  if (e.target.dataset && e.target.dataset.recipeshot && e.target.files && e.target.files[0]) { importRecipeShot(e.target.files[0]); e.target.value = ''; return; }
+  if (e.target.name === 'like' || e.target.name === 'react' || e.target.name === 'rate') { e.target.closest('.chips').querySelectorAll('.chip').forEach(l => l.classList.toggle('on', l.querySelector('input').checked)); return; }
   if (e.target.name === 'food' && e.target.form && e.target.form.dataset.form === 'food') { const nm = e.target.value.trim().toLowerCase(), f = allFoods().find(x => x.name.toLowerCase() === nm), fs = e.target.form; if (f) { foodSheet = { food: f.id, like: (fs.querySelector('input[name=like]:checked') || {}).value, react: (fs.querySelector('input[name=react]:checked') || {}).value }; renderApp(); } return; }
   if (e.target.name !== 'mood') return;
   e.target.closest('form').querySelectorAll('.moods .chip').forEach(l => l.classList.toggle('on', l.querySelector('input').checked));

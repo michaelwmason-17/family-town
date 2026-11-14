@@ -1,6 +1,17 @@
 {
   "crons": [
-    { "path": "/api/morning", "schedule": "0 15 * * *" },
-    { "path": "/api/evening", "schedule": "0 3 * * *" }
-  ]
+    {
+      "path": "/api/morning",
+      "schedule": "0 15 * * *"
+    },
+    {
+      "path": "/api/evening",
+      "schedule": "0 3 * * *"
+    }
+  ],
+  "functions": {
+    "api/chef.js": {
+      "maxDuration": 60
+    }
+  }
 }

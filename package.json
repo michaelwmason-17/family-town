@@ -1,8 +1,9 @@
 {
   "name": "family-town",
   "private": true,
-  "description": "Family Town: the website's small server functions (notifications, calendar, Bible text).",
+  "description": "Family Town: the website's small server functions (notifications, calendar, Bible text, the Chef).",
   "dependencies": {
-    "web-push": "3.6.7"
+    "web-push": "3.6.7",
+    "@anthropic-ai/sdk": "latest"
   }
 }
