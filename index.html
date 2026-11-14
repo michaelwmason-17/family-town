@@ -1175,10 +1175,10 @@ function drawChar(c, sx, sy, frame) {
   for (const [x, y, wd, ht] of parts) px(ctx, X(x, wd) - 1, oy + y - 1, wd + 2, ht + 2, '#202020');
   for (const [x, y, wd, ht, col] of parts) px(ctx, X(x, wd), oy + y, wd, ht, col);
   // the face
-  const eye = '#2a2438', blush = '#f0a098', mouth = '#b04848', fy = oy + bob;
+  const eye = '#2a2438', blush = '#f0a098', mouth = '#c86868', fy = oy + bob;
   if (d === 'down') {
-    px(ctx, sx + 5, fy + 5, 2, 2, eye); px(ctx, sx + 9, fy + 5, 2, 2, eye);
-    px(ctx, sx + 6, fy + 5, 1, 1, '#ffffff'); px(ctx, sx + 10, fy + 5, 1, 1, '#ffffff');
+    const blink = (performance.now() / 1000 + (c.x || 0) * .7) % 4 < .12, eh = blink ? 1 : 2, ey = fy + (blink ? 6 : 5);
+    px(ctx, sx + 6, ey, 1, eh, eye); px(ctx, sx + 9, ey, 1, eh, eye);
     px(ctx, sx + 5, fy + 7, 1, 1, blush); px(ctx, sx + 10, fy + 7, 1, 1, blush);
     px(ctx, sx + 7, fy + 8, 2, 1, mouth);
     if (p.motif) for (const [x, y, col] of p.motif) px(ctx, sx + x, oy + y + 3 + bob, 1, 1, col);
