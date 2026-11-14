@@ -147,6 +147,14 @@
   .eyebrow { font-size:12px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; color:var(--a-soft); }
   .link { background:none; border:none; color:var(--a-bay); font:inherit; font-weight:700; font-size:14px; cursor:pointer; padding:10px 6px; margin:-10px -6px; min-height:44px; }
   .ci-mini { display:flex; flex-direction:column; gap:8px; }
+  .pill.ok { background:var(--a-kelp-soft); color:var(--a-kelp); }
+  .pill.none { background:transparent; border:1px solid var(--a-line); color:var(--a-soft); }
+  .pill.warn { background:#f8e0d8; color:#b0442c; }
+  .food-row { border-top:1px solid var(--a-line); }
+  .food-main { display:flex; align-items:center; gap:10px; width:100%; background:none; border:none; color:inherit; font:inherit; padding:10px 0; cursor:pointer; min-height:48px; }
+  .food-dot { width:24px; height:24px; border-radius:50%; border:2px solid var(--a-line); display:grid; place-items:center; font-size:13px; font-weight:900; color:#fff; flex:none; }
+  .food-dot.on { background:var(--a-kelp); border-color:var(--a-kelp); }
+  .food-tip { padding:0 0 12px 34px; }
   .cal-h .btn.sm { min-width:44px; min-height:40px; }
   .muted2 { color:var(--a-soft); font-size:14px; }
   .big-num { font-family:var(--f-display); font-size:30px; font-weight:700; font-variant-numeric:tabular-nums; line-height:1; }
@@ -508,7 +516,7 @@ async function flushKey(k) {
 }
 // Lists where both of you add items (chat, calendar, chores) merge item by item instead of
 // last-write-wins, so two things added at the same moment both survive.
-const MERGE_KEYS = { photolog: p => p.id, bcomments: c => c.id, notes: n => n.id, events: e => e.id, chorelog: e => `${e.at}|${e.id}|${e.by}`, bigGoals: g => g.id, goals: g => g.id, prayers: p => p.id };
+const MERGE_KEYS = { photolog: p => p.id, bcomments: c => c.id, notes: n => n.id, events: e => e.id, chorelog: e => `${e.at}|${e.id}|${e.by}`, bigGoals: g => g.id, goals: g => g.id, prayers: p => p.id, foods: e => e.id };
 const tomb = {};                // item keys deleted on this phone, so a merge doesn't bring them back
 const recent = {};              // item keys this phone added in the last minute
 function noteAdded(k, item) { (recent[k] = recent[k] || new Map()).set(MERGE_KEYS[k](item), Date.now()); }
@@ -2467,7 +2475,7 @@ const DQ_POOL = [
   { id: 'rec', ev: 'play_rec', n: 1, kind: 'game', text: 'Play anything at the rec center' },
   { id: 'hi', ev: 'newbest', n: 1, kind: 'game', text: 'Beat your best score in any game this week' },
   // real life
-  { id: 'care', ev: 'care', n: 2, kind: 'life', text: 'Log 2 things in Margo & pets care' },
+  { id: 'food', ev: 'food', n: 1, kind: 'life', text: 'Log a food Margo tried' },
   { id: 'chores2', ev: 'chore', n: 2, kind: 'life', text: 'Do 2 real chores' },
   { id: 'note', ev: 'note', n: 1, kind: 'life', text: 'Send {them} a sweet message' },
   { id: 'photo', ev: 'dphoto', n: 1, kind: 'life', text: 'Take a daily photo' },
@@ -3748,7 +3756,7 @@ Object.assign(CHORES, {
   wake:       { name: 'Margo woke up', pts: 0, max: 8, verb: 'HI!', done: 'Good morning, Margo!', care: true },
   margo_med:  { name: 'Give Margo medicine', pts: 1, max: 4, verb: 'GIVE!', done: 'Medicine given. Brave girl.', care: true },
 });
-STATIONS.c.chores = ['feed_margo', 'diaper', 'nap', 'bath'];
+
 const CARE_IDS = new Set(['feed_margo', 'wake', 'margo_med', 'diaper', 'nap', 'bath', 'feed_dogs', 'walk_real', 'feed_cat', 'litter', 'poop']);
 const agoText = ms => { const m = Math.max(0, Math.round((Date.now() - ms) / 60000)); return m < 1 ? 'just now' : m < 60 ? `${m}m ago` : m < 24 * 60 ? `${Math.floor(m / 60)}h ${m % 60 ? (m % 60) + 'm ' : ''}ago` : relDay(ms); };
 const lastOf = id => lastDone([id]);
@@ -3782,20 +3790,19 @@ function careCard(full) {
     <div class="chips" style="margin-top:8px">${careBtn('feed_dogs', 'Fed dogs')}${careBtn('walk_real', 'Walked')}${careBtn('feed_cat', 'Fed SK')}${careBtn('litter', 'Litter')}</div>
     ${due.length ? `<div style="margin-top:12px">${due.map(([p, n]) => `<div class="care-line"><span class="care-l" style="color:${n < 0 ? 'var(--a-red, #c0442c)' : 'inherit'}">${esc(p.name)}</span><span class="row2"><span class="muted2">${dueText(n)}</span><button class="btn sm" data-act="petdone" data-id="${p.id}">Done</button></span></div>`).join('')}</div>` : ''}</section>`;
 }
-function careScreen() {
-  const list = petCare(), recent = choreLog().filter(e => CARE_IDS.has(e.id) && e.at > Date.now() - 2 * 864e5).sort((a, b) => b.at - a.at).slice(0, 20);
-  return careCard(true) + `<section class="card"><div class="card-h"><span class="eyebrow">Pet health schedule</span></div>
+function petScheduleCard() {
+  const list = petCare();
+  return `<section class="card"><div class="card-h"><span class="eyebrow">Pet health schedule</span></div>
       ${list.map(p => { const n = dueIn(p); return `<div class="item"><div class="txt"><span>${esc(p.name)}</span><div class="meta">Every ${p.every === 365 ? 'year' : p.every + ' days'} &middot; ${p.last ? `last ${new Date(p.last + 'T12:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} &middot; ${dueText(n)}` : 'Tap Done the next time you do it'}</div></div><button class="btn sm ${p.last && n > 3 ? 'ghost' : ''}" data-act="petdone" data-id="${p.id}">Done</button><button class="x" data-act="petdel" data-id="${p.id}" aria-label="Remove">&times;</button></div>`; }).join('')}
       <form class="stack2" data-form="petcare" style="margin-top:12px"><input class="in" name="name" maxlength="50" placeholder="Margo's vitamin D drops" aria-label="What"><div class="row2"><span class="muted2">Every</span><input class="in" name="every" type="number" inputmode="numeric" min="1" max="365" value="30" aria-label="Days" style="flex:0 0 80px"><span class="muted2">days</span><button class="btn">Add</button></div></form>
-      <p class="muted2" style="margin:8px 0 0">You'll both get a reminder on the morning something is due (once notifications are on).</p></section>
-    <section class="card"><div class="card-h"><span class="eyebrow">Last 2 days</span></div>${recent.map(e => `<div class="item"><div class="txt"><span>${esc(CHORES[e.id].name)}</span><div class="meta">${esc(titleCase(nameOf(e.by)))} &middot; ${relDay(e.at)}, ${fmtTime(e.at)}</div></div>${e.by === active ? `<button class="x" data-act="unchore" data-at="${e.at}" data-id="${e.id}" aria-label="Remove this entry">&times;</button>` : ''}</div>`).join('') || '<p class="empty">Nothing logged yet.</p>'}</section>`;
+      <p class="muted2" style="margin:8px 0 0">You'll both get a reminder on the morning something is due (once notifications are on).</p></section>`;
 }
 
 // ---------- Phone notifications (website only): messages, check-ins, photos, prayers, reminders ----------
 function notifyPartner(kind, title, body) {
   try { if (window.FT_WEB && FT_WEB.notify) FT_WEB.notify({ kind, title: String(title).slice(0, 60), body: String(body || '').slice(0, 160) }).catch(() => {}); } catch (e) { /* notifications are optional */ }
 }
-const PUSH_KINDS = [['message', 'Messages'], ['checkin', 'Check-ins'], ['photo', 'Photos'], ['prayer', 'Prayer candles'], ['remind', 'Daily reminders']];
+const PUSH_KINDS = [['message', 'Messages'], ['food', "Margo's foods"], ['checkin', 'Check-ins'], ['photo', 'Photos'], ['prayer', 'Prayer candles'], ['remind', 'Daily reminders']];
 let pushInfo = { state: 'loading', prefs: {} };
 async function refreshPush() {
   if (!window.FT_WEB || !FT_WEB.pushState) pushInfo = { state: 'artifact', prefs: {} };
@@ -3814,6 +3821,138 @@ function notifyCard() {
       <p class="muted2" style="margin:10px 0 0; font-size:13px">Daily reminders: a morning rundown (calendar, dinner plan, pet meds due) and an evening nudge (check-in, quests, the Sunday recap).</p>`
     : '<p class="muted2" style="margin:0">Checking...</p>';
   return `<section class="card"><div class="card-h"><span class="eyebrow">Notifications</span></div>${body}</section>`;
+}
+
+
+// ---------- Margo's first foods: a food log, allergen tracker, reactions, and a "first 100 foods" goal ----------
+// Serving tips are short, general guidance for about 6-9 months. Always follow Margo's pediatrician.
+const FOOD_TIPS = {
+  ripe: 'Very ripe and soft: big spears she can grab, or mashed.',
+  soft: 'Cook until soft enough to squish between your fingers; serve finger-size strips or mash.',
+  mash: 'Mash, or spread thinly on a toast strip.',
+  round: 'Small round food = choking risk. Quarter lengthwise or flatten between your fingers, or mash.',
+  hard: 'Hard and raw = choking risk. Steam until soft, or grate it finely.',
+  nut: 'Never whole nuts. Thin a smooth butter with water or yogurt, or stir a little into oatmeal.',
+  egg: 'Cook all the way through: scrambled pieces or omelet strips.',
+  meat: 'Cook through. Shred very finely or mix into a mash, or offer a large strip to gnaw on.',
+  fish: 'Cook through and flake it. Check carefully for bones.',
+  grain: 'Cook soft: oatmeal, sticky rice, soft pasta shapes, or thin toast strips.',
+  dairy: 'Plain and full-fat. Cow\'s milk as a drink waits until 12 months; in food is fine.',
+  bean: 'Cook very soft and mash, or flatten each one.',
+  flavor: 'A little in her food is a great way to try new flavors.',
+  wait: 'Wait until after her first birthday.',
+};
+const FOOD_CATS = [['fruit', 'Fruit'], ['veg', 'Veggies'], ['grain', 'Grains'], ['protein', 'Protein'], ['dairy', 'Dairy'], ['other', 'Flavors']];
+const ALLERGENS = [['peanut', 'Peanut'], ['egg', 'Egg'], ['dairy', 'Dairy'], ['wheat', 'Wheat'], ['soy', 'Soy'], ['treenut', 'Tree nuts'], ['fish', 'Fish'], ['shellfish', 'Shellfish'], ['sesame', 'Sesame']];
+// [name, category, tip, allergen]
+const FOOD_LIB = [
+  ['Avocado', 'fruit', 'ripe'], ['Banana', 'fruit', 'ripe'], ['Mango', 'fruit', 'ripe'], ['Pear', 'fruit', 'ripe'], ['Peach', 'fruit', 'ripe'], ['Plum', 'fruit', 'ripe'],
+  ['Kiwi', 'fruit', 'ripe'], ['Papaya', 'fruit', 'ripe'], ['Watermelon', 'fruit', 'ripe'], ['Cantaloupe', 'fruit', 'ripe'], ['Strawberry', 'fruit', 'ripe'], ['Pineapple', 'fruit', 'ripe'],
+  ['Apricot', 'fruit', 'ripe'], ['Fig', 'fruit', 'ripe'], ['Orange', 'fruit', 'ripe'], ['Apple', 'fruit', 'hard'], ['Blueberry', 'fruit', 'round'], ['Raspberry', 'fruit', 'mash'],
+  ['Blackberry', 'fruit', 'mash'], ['Grapes', 'fruit', 'round'], ['Cherries', 'fruit', 'round'], ['Prunes', 'fruit', 'mash'], ['Dates', 'fruit', 'mash'], ['Pomegranate', 'fruit', 'round'], ['Coconut', 'fruit', 'mash'],
+  ['Sweet potato', 'veg', 'soft'], ['Carrot', 'veg', 'hard'], ['Broccoli', 'veg', 'soft'], ['Cauliflower', 'veg', 'soft'], ['Green beans', 'veg', 'soft'], ['Peas', 'veg', 'round'],
+  ['Zucchini', 'veg', 'soft'], ['Butternut squash', 'veg', 'soft'], ['Pumpkin', 'veg', 'soft'], ['Spinach', 'veg', 'mash'], ['Kale', 'veg', 'mash'], ['Beets', 'veg', 'soft'],
+  ['Potato', 'veg', 'soft'], ['Corn', 'veg', 'soft'], ['Asparagus', 'veg', 'soft'], ['Bell pepper', 'veg', 'soft'], ['Cucumber', 'veg', 'hard'], ['Tomato', 'veg', 'round'],
+  ['Mushrooms', 'veg', 'soft'], ['Eggplant', 'veg', 'soft'], ['Cabbage', 'veg', 'soft'], ['Brussels sprouts', 'veg', 'round'], ['Artichoke', 'veg', 'soft'], ['Parsnip', 'veg', 'soft'],
+  ['Okra', 'veg', 'soft'], ['Leeks', 'veg', 'soft'], ['Turnip', 'veg', 'soft'], ['Onion', 'veg', 'soft'], ['Celery', 'veg', 'hard'],
+  ['Oatmeal', 'grain', 'grain'], ['Rice', 'grain', 'grain'], ['Quinoa', 'grain', 'grain'], ['Barley', 'grain', 'grain'], ['Pasta', 'grain', 'grain', 'wheat'], ['Toast', 'grain', 'grain', 'wheat'],
+  ['Millet', 'grain', 'grain'], ['Polenta', 'grain', 'grain'], ['Couscous', 'grain', 'grain', 'wheat'], ['Pancakes', 'grain', 'grain', 'wheat'],
+  ['Egg', 'protein', 'egg', 'egg'], ['Chicken', 'protein', 'meat'], ['Beef', 'protein', 'meat'], ['Turkey', 'protein', 'meat'], ['Pork', 'protein', 'meat'], ['Lamb', 'protein', 'meat'],
+  ['Salmon', 'protein', 'fish', 'fish'], ['Cod', 'protein', 'fish', 'fish'], ['Sardines', 'protein', 'fish', 'fish'], ['Shrimp', 'protein', 'fish', 'shellfish'], ['Crab', 'protein', 'fish', 'shellfish'],
+  ['Tofu', 'protein', 'soft', 'soy'], ['Edamame', 'protein', 'bean', 'soy'], ['Lentils', 'protein', 'bean'], ['Black beans', 'protein', 'bean'], ['Chickpeas', 'protein', 'bean'], ['Hummus', 'protein', 'mash', 'sesame'],
+  ['Peanut butter', 'protein', 'nut', 'peanut'], ['Almond butter', 'protein', 'nut', 'treenut'], ['Cashew butter', 'protein', 'nut', 'treenut'], ['Walnut (ground)', 'protein', 'nut', 'treenut'], ['Tahini', 'protein', 'nut', 'sesame'], ['Chia seeds', 'protein', 'flavor'],
+  ['Yogurt', 'dairy', 'dairy', 'dairy'], ['Cottage cheese', 'dairy', 'dairy', 'dairy'], ['Ricotta', 'dairy', 'dairy', 'dairy'], ['Cheddar', 'dairy', 'dairy', 'dairy'], ['Mozzarella', 'dairy', 'dairy', 'dairy'], ['Butter', 'dairy', 'flavor', 'dairy'],
+  ['Cinnamon', 'other', 'flavor'], ['Garlic', 'other', 'flavor'], ['Ginger', 'other', 'flavor'], ['Basil', 'other', 'flavor'], ['Cumin', 'other', 'flavor'], ['Lemon', 'other', 'flavor'], ['Honey', 'other', 'wait'],
+].map(([name, cat, tip, allergen]) => ({ id: name.toLowerCase().replace(/[^a-z]+/g, '-'), name, cat, tip, allergen: allergen || null }));
+const FOOD_GOAL = 100;
+const LIKES = [['love', '😍 Loved it'], ['like', '🙂 Liked it'], ['meh', '😐 Meh'], ['no', '🙅 Refused']];
+const REACTS = [['none', 'No reaction'], ['rash', 'Rash or hives'], ['tummy', 'Spit up or vomit'], ['gag', 'Gagged a lot'], ['other', 'Something else']];
+const foodLog = () => load('foods', []);
+const customFoods = () => load('foodsCustom', []);
+const allFoods = () => [...FOOD_LIB, ...customFoods()];
+const foodById = id => allFoods().find(f => f.id === id) || { id, name: titleCase(String(id).replace(/-/g, ' ')), cat: 'other', tip: 'flavor', allergen: null };
+function foodStats() {
+  const by = {};
+  for (const e of foodLog()) { const s = by[e.food] ||= { n: 0, first: e.at, last: e.at, likes: [], reacts: [] }; s.n++; s.first = Math.min(s.first, e.at); s.last = Math.max(s.last, e.at); s.likes.push(e.like); if (e.react && e.react !== 'none') s.reacts.push(e); }
+  return by;
+}
+let foodSheet = null, foodFilter = 'all', foodOpen = null;
+function allergenRows(st) {
+  return ALLERGENS.map(([k, label]) => {
+    const fs = allFoods().filter(f => f.allergen === k), logs = foodLog().filter(e => foodById(e.food).allergen === k).sort((a, b) => b.at - a.at);
+    const react = logs.some(e => e.react && e.react !== 'none' && e.react !== 'gag'), days = logs.length ? daysSince(logs[0].at) : null;
+    const status = !logs.length ? '<span class="pill none">Not yet</span>' : react ? '<span class="pill warn">Reaction noted</span>' : `<span class="pill ok">${logs.length}&times;</span>`;
+    const sub = !logs.length ? `Try: ${fs.slice(0, 2).map(f => esc(f.name.toLowerCase())).join(' or ')}` : `Last ${days === 0 ? 'today' : days === 1 ? 'yesterday' : days + ' days ago'}${days >= 7 && !react ? ' &middot; time for another taste' : ''}`;
+    return `<div class="care-line"><div><div class="care-l">${label}</div><div class="muted2" style="font-size:13px">${sub}</div></div>${status}</div>`;
+  }).join('');
+}
+function foodsHomeCard() {
+  const st = foodStats(), tried = Object.keys(st).length, last = foodLog().slice().sort((a, b) => b.at - a.at)[0];
+  return `<section class="card"><div class="card-h"><span class="eyebrow">Margo's first foods</span><button class="link" data-act="list" data-sub="foods">Open</button></div>
+    <div class="row2" style="justify-content:space-between; align-items:center"><div><div class="big-num" style="font-size:28px">${tried}<span class="muted2" style="font-size:15px"> / ${FOOD_GOAL} foods</span></div>
+      <div class="muted2">${last ? `Last: ${esc(foodById(last.food).name.toLowerCase())}, ${relDay(last.at)}` : 'Log her first taste!'}</div></div><button class="btn" data-act="foodlog">Log a food</button></div>
+    <div class="bar2" style="margin-top:10px"><i style="width:${Math.min(100, tried / FOOD_GOAL * 100)}%"></i></div></section>`;
+}
+function foodForm() {
+  const f = foodSheet || {}, chosen = f.food ? foodById(f.food) : null;
+  return `<section class="card" id="foodForm"><div class="card-h"><span class="eyebrow">Log a food</span><button class="link" data-act="foodcancel">Cancel</button></div>
+    <form class="stack2" data-form="food">
+      <input class="in" name="food" list="foodNames" value="${chosen ? esc(chosen.name) : ''}" placeholder="Avocado" aria-label="Food" autocomplete="off">
+      <datalist id="foodNames">${allFoods().map(x => `<option value="${esc(x.name)}">`).join('')}</datalist>
+      ${chosen ? `<p class="muted2" style="margin:0">${FOOD_TIPS[chosen.tip] || ''}</p>` : ''}
+      <div style="font-weight:800">How did it go?</div>
+      <div class="chips">${LIKES.map(([k, l]) => `<label class="chip ${f.like === k ? 'on' : ''}"><input type="radio" name="like" value="${k}" ${f.like === k ? 'checked' : ''} hidden>${l}</label>`).join('')}</div>
+      <div style="font-weight:800">Any reaction?</div>
+      <div class="chips">${REACTS.map(([k, l]) => `<label class="chip ${(f.react || 'none') === k ? 'on' : ''}"><input type="radio" name="react" value="${k}" ${(f.react || 'none') === k ? 'checked' : ''} hidden>${l}</label>`).join('')}</div>
+      <input class="in" name="note" maxlength="140" placeholder="Note (how you served it, how much she ate)" aria-label="Note">
+      <input class="in" name="date" type="date" value="${dateKey(new Date())}" max="${dateKey(new Date())}" aria-label="Date">
+      <button class="btn">Save</button></form></section>`;
+}
+function foodsScreen() {
+  const st = foodStats(), tried = Object.keys(st).length, wk = Date.now() - 7 * 864e5;
+  const newWk = Object.values(st).filter(s => s.first > wk).length, reacts = foodLog().filter(e => e.react && e.react !== 'none').sort((a, b) => b.at - a.at);
+  const ideas = (() => { const out = [], seen = new Set(Object.keys(st)); for (const [c] of FOOD_CATS) { const f = FOOD_LIB.find(x => x.cat === c && !seen.has(x.id) && x.tip !== 'wait' && x.tip !== 'round' && x.tip !== 'hard'); if (f) out.push(f); } return out.slice(0, 6); })();
+  const list = allFoods().filter(f => foodFilter === 'all' || (foodFilter === 'tried' ? st[f.id] : foodFilter === 'new' ? !st[f.id] : f.cat === foodFilter));
+  const recent = foodLog().slice().sort((a, b) => b.at - a.at).slice(0, 12);
+  const likeLabel = k => (LIKES.find(x => x[0] === k) || ['', ''])[1];
+  return `${foodSheet ? foodForm() : ''}
+    <section class="card"><div class="card-h"><span class="eyebrow">Margo's first foods</span><span class="muted2">${newWk} new this week</span></div>
+      <div class="row2" style="justify-content:space-between; align-items:center"><div class="big-num" style="font-size:34px">${tried}<span class="muted2" style="font-size:16px"> of ${FOOD_GOAL}</span></div>${foodSheet ? '' : '<button class="btn" data-act="foodlog">Log a food</button>'}</div>
+      <div class="bar2" style="margin-top:10px"><i style="width:${Math.min(100, tried / FOOD_GOAL * 100)}%"></i></div>
+      <div class="chips" style="margin-top:12px">${FOOD_CATS.map(([c, l]) => { const n = Object.keys(st).filter(id => foodById(id).cat === c).length; return `<span class="chip soft">${l} ${n}</span>`; }).join('')}</div></section>
+    ${ideas.length ? `<section class="card"><div class="card-h"><span class="eyebrow">Ideas to try next</span></div><div class="chips">${ideas.map(f => `<button class="chip" data-act="foodlog" data-id="${f.id}">+ ${esc(f.name)}</button>`).join('')}</div></section>` : ''}
+    <section class="card"><div class="card-h"><span class="eyebrow">Allergens</span><span class="muted2">The 9 most common</span></div>${allergenRows(st)}
+      <p class="muted2" style="margin:10px 0 0; font-size:13px">Once an allergen goes well, offering it regularly (a few times a week) helps keep it in her diet. Ask her pediatrician about timing.</p></section>
+    ${reacts.length ? `<section class="card"><div class="card-h"><span class="eyebrow">Reactions to mention to the doctor</span></div>${reacts.slice(0, 8).map(e => `<div class="item"><div class="txt"><span>${esc(foodById(e.food).name)}: ${esc((REACTS.find(r => r[0] === e.react) || ['', 'Reaction'])[1].toLowerCase())}</span><div class="meta">${new Date(e.at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}${e.note ? ' &middot; ' + esc(e.note) : ''}</div></div></div>`).join('')}</section>` : ''}
+    <section class="card"><div class="card-h"><span class="eyebrow">Food library</span><span class="muted2">${list.length}</span></div>
+      <div class="chips" style="margin-bottom:8px">${[['all', 'All'], ['new', 'Not tried'], ['tried', 'Tried'], ...FOOD_CATS].map(([k, l]) => `<button class="chip ${foodFilter === k ? 'on' : ''}" data-act="foodfilter" data-k="${k}">${l}</button>`).join('')}</div>
+      ${list.map(f => { const s = st[f.id], open = foodOpen === f.id;
+        return `<div class="food-row"><button class="food-main" data-act="foodopen" data-id="${f.id}"><span class="food-dot ${s ? 'on' : ''}">${s ? '&#10003;' : ''}</span><span style="flex:1; text-align:left"><b>${esc(f.name)}</b>${f.allergen ? ` <span class="pill">${esc((ALLERGENS.find(a => a[0] === f.allergen) || ['', ''])[1])}</span>` : ''}${f.tip === 'wait' ? ' <span class="pill warn">Not yet</span>' : ''}<br><span class="muted2" style="font-size:13px">${s ? `${s.n} time${s.n === 1 ? '' : 's'} &middot; ${esc(likeLabel(s.likes[s.likes.length - 1]))}${s.reacts.length ? ' &middot; reaction noted' : ''}` : 'Not tried yet'}</span></span></button>
+          ${open ? `<div class="food-tip"><p style="margin:0 0 8px">${FOOD_TIPS[f.tip] || ''}</p>${f.tip === 'wait' ? '' : `<button class="btn sm" data-act="foodlog" data-id="${f.id}">Log ${esc(f.name.toLowerCase())}</button>`}</div>` : ''}</div>`; }).join('')}
+      <form class="row2" data-form="foodcustom" style="margin-top:12px"><input class="in" name="name" maxlength="40" placeholder="Add a food that's not here" aria-label="New food"><button class="btn ghost">Add</button></form></section>
+    <section class="card"><div class="card-h"><span class="eyebrow">Recent</span>${foodLog().length ? '<button class="link" data-act="foodcsv">Download for the doctor</button>' : ''}</div>
+      ${recent.map(e => `<div class="item"><div class="txt"><span>${esc(foodById(e.food).name)} &middot; ${esc(likeLabel(e.like))}</span><div class="meta">${esc(titleCase(nameOf(e.by)))} &middot; ${relDay(e.at)}${e.react && e.react !== 'none' ? ' &middot; ' + esc((REACTS.find(r => r[0] === e.react) || ['', ''])[1].toLowerCase()) : ''}${e.note ? ' &middot; ' + esc(e.note) : ''}</div></div>${e.by === active ? `<button class="x" data-act="fooddel" data-id="${e.id}" aria-label="Remove">&times;</button>` : ''}</div>`).join('') || '<p class="empty">Nothing logged yet.</p>'}</section>
+    <section class="card"><div class="card-h"><span class="eyebrow">Safety basics</span></div>
+      <ul class="muted2" style="margin:0; padding-left:20px; line-height:1.55"><li>Always seated upright and watched while eating.</li><li>Quarter or flatten small round foods (grapes, blueberries, cherry tomatoes).</li><li>No whole nuts, popcorn, or hard raw chunks.</li><li>No honey before age 1.</li><li>Gagging is normal and noisy; choking is silent. Consider an infant CPR class.</li><li>Follow Margo's pediatrician, especially for allergens and any reaction.</li></ul></section>`;
+}
+function saveFood(foodName, like, react, note, date) {
+  const nm = foodName.trim(); if (!nm) return null;
+  let f = allFoods().find(x => x.name.toLowerCase() === nm.toLowerCase());
+  if (!f) { f = { id: 'c-' + nm.toLowerCase().replace(/[^a-z]+/g, '-'), name: titleCase(nm), cat: 'other', tip: 'flavor', allergen: null }; mem.foodsCustom = [...customFoods(), f]; save('foodsCustom'); }
+  const isNew = !foodLog().some(e => e.food === f.id), at = date && date !== dateKey(new Date()) ? new Date(date + 'T12:00').getTime() : Date.now();
+  const e = { id: uid(), food: f.id, by: active, at, date: date || dateKey(new Date()), like: like || 'like', react: react || 'none', note: note || '' };
+  mem.foods = [...foodLog(), e]; noteAdded('foods', e); save('foods');
+  track('food');
+  const got = isNew ? capAward('food', 9, 3) : 0;
+  if (isNew) notifyPartner('food', 'Margo tried something new!', `${f.name}${like === 'love' ? ' (she loved it!)' : like === 'no' ? ' (not a fan yet)' : ''}`);
+  if (react && react !== 'none' && react !== 'gag') notifyPartner('food', `Reaction noted: ${f.name}`, `${titleCase(nameOf(active))} logged a possible reaction. Check the app.`);
+  return { f, isNew, got };
+}
+function foodCsv() {
+  const rows = [['Date', 'Food', 'Allergen', 'How it went', 'Reaction', 'Note', 'Fed by']].concat(foodLog().slice().sort((a, b) => a.at - b.at).map(e => { const f = foodById(e.food);
+    return [new Date(e.at).toLocaleDateString('en-US'), f.name, f.allergen || '', (LIKES.find(x => x[0] === e.like) || ['', ''])[1].replace(/^\S+\s/, ''), (REACTS.find(x => x[0] === e.react) || ['', ''])[1], e.note || '', titleCase(nameOf(e.by))]; }));
+  const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n'), a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' })); a.download = `margo-first-foods-${dateKey(new Date())}.csv`; document.body.appendChild(a); a.click(); a.remove();
 }
 
 // ---------- A pick-one menu (riddles, seeds, yard sales) ----------
@@ -5232,7 +5371,7 @@ const TAB_RENDER = {
         ${dinner ? `<div class="care-line" style="margin-top:8px"><span class="care-l">Dinner</span><span class="muted2">${esc(dinner.dish)}</span></div>` : ''}
         ${upcoming.length ? `<div class="eyebrow" style="margin:12px 0 6px">Coming up</div>${upcoming.map(([i, e]) => `<div class="meta muted2" style="margin-top:6px">${i === 1 ? 'Tomorrow' : addDays(i).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}</div>${evCard(e)}`).join('')}` : ''}</section>
       ${homeOn('quests') ? questsCard() : ''}
-      ${homeOn('care') ? careCard() : ''}
+      ${homeOn('foods') ? foodsHomeCard() : ''}
       ${homeOn('quick') ? quickCard(toBuy, todos, lastMsg, un) : ''}
       ${crownDeals().owed.filter(o => !o.done && (o.from === active || o.to === active)).map(o => `<section class="card crown-card"><div class="owed" style="margin:0"><div><div class="eyebrow">${o.from === active ? 'You owe ' + esc(partnerName()) : esc(partnerName()) + ' owes you'}</div><div style="font-weight:800">${esc(o.text)}</div></div><button class="btn sm" data-act="owedone" data-id="${o.id}">Done</button></div></section>`).join('')}
       ${homeOn('race') ? raceCard() : ''}
@@ -5295,11 +5434,11 @@ const TAB_RENDER = {
   },
 
   lists() {
-    const segs = [['groceries', 'Groceries'], ['todos', 'To-dos'], ['chores', 'Chores'], ['care', 'Margo & pets'], ['goals', 'Goals'], ['dinners', 'Dinners'], ['ideas', 'Outing ideas']];
+    const segs = [['groceries', 'Groceries'], ['todos', 'To-dos'], ['chores', 'Chores'], ['foods', "Margo's food"], ['goals', 'Goals'], ['dinners', 'Dinners'], ['ideas', 'Outing ideas']];
     const seg = `<div class="seg">${segs.map(([k, l]) => `<button class="chip ${listTab === k ? 'on' : ''}" data-act="list" data-sub="${k}">${l}</button>`).join('')}</div>`;
     let body = '';
-    if (listTab === 'chores') body = choresScreen();
-    else if (listTab === 'care') body = careScreen();
+    if (listTab === 'chores') body = choresScreen() + petScheduleCard();
+    else if (listTab === 'foods' || listTab === 'care') body = foodsScreen();
     else if (listTab === 'groceries') {
       const items = listItems('groceries').map((it, i) => [it, i]), open = items.filter(([it]) => !it.done), got = items.filter(([it]) => it.done);
       body = `<section class="card"><form class="row2" data-form="add" data-key="groceries"><input class="in" name="t" maxlength="60" placeholder="Avocados" aria-label="Add a grocery"><button class="btn">Add</button></form>
@@ -5369,7 +5508,8 @@ function recapScreen(w) {
   const ciDays = days.filter(d => checkins(0)[d] || checkins(1)[d]);
   const chores = choreLog().filter(e => days.includes(e.day) && CHORES[e.id] && !CHORES[e.id].care).length, missions = missionState().done.filter(d => d.week === w).length;
   const evs = load('events', []).filter(e => days.includes(e.date)).length;
-  const lines = [chores && `${chores} chores done around the house`, missions && `${missions} mission${missions === 1 ? '' : 's'} finished together`, evs && `${evs} thing${evs === 1 ? '' : 's'} on the calendar`, pics.length && `${pics.length} photo${pics.length === 1 ? '' : 's'} of your life together`, ciDays.length && `${ciDays.length} day${ciDays.length === 1 ? '' : 's'} of check-ins`].filter(Boolean);
+  const newFoods = (() => { const firsts = {}; for (const e of foodLog()) firsts[e.food] = Math.min(firsts[e.food] || Infinity, e.at); return Object.values(firsts).filter(t => days.includes(dateKey(new Date(t)))).length; })();
+  const lines = [newFoods && `Margo tried ${newFoods} new food${newFoods === 1 ? '' : 's'}`, chores && `${chores} chores done around the house`, missions && `${missions} mission${missions === 1 ? '' : 's'} finished together`, evs && `${evs} thing${evs === 1 ? '' : 's'} on the calendar`, pics.length && `${pics.length} photo${pics.length === 1 ? '' : 's'} of your life together`, ciDays.length && `${ciDays.length} day${ciDays.length === 1 ? '' : 's'} of check-ins`].filter(Boolean);
   const win = h.winner, cheer = win < 0 ? 'A tie! The crown stays where it is. What a team.' : `${nm(win)} wears the crown this week! ${nm(1 - win)}, you were amazing too.`;
   const nextMon = weekKey(), focus = load('weekFocus', {});
   return `<section class="card recap-hero"><div class="eyebrow">Week in review &middot; ${range}</div>
@@ -5565,7 +5705,7 @@ const ciBox = (who, c) => `<div class="ci"><div class="row2">${ava(who, 28)}<b>$
   ? `<p>Feeling <span class="mood">${esc((c.mood || '').toLowerCase())}</span>${c.feel ? `${c.mood ? ': ' : ''}${esc(c.feel)}` : ''}</p>${c.thankful ? `<p>Thankful for ${esc(c.thankful)}</p>` : ''}${c.pray ? `<p class="muted2">Pray for: ${esc(c.pray)}</p>` : ''}`
   : '<p class="muted2">Hasn\'t checked in yet today.</p>'}</div>`;
 // ----- Home: cards you can hide (per phone), and one Quick add card for messages, groceries, to-dos, and chores -----
-const HOME_CARDS = [['quests', "Today's quests"], ['care', 'Margo & pets'], ['quick', 'Quick add'], ['race', 'This week (points)'], ['mission', 'Missions together'], ['photos', "Today's photos"], ['bible', 'Bible reading'], ['town', 'Family Town today']];
+const HOME_CARDS = [['quests', "Today's quests"], ['foods', "Margo's first foods"], ['quick', 'Quick add'], ['race', 'This week (points)'], ['mission', 'Missions together'], ['photos', "Today's photos"], ['bible', 'Bible reading'], ['town', 'Family Town today']];
 const homeOn = k => !store.get('homeHide', []).includes(k);
 let quickMode = 'note';
 function quickCard(toBuy, todos, lastMsg, un) {
@@ -5952,6 +6092,12 @@ function onAppClick(e) {
     case 'heartc': { const c = bcomments().find(x => x.id === d.id); if (c) { c.hearts = (c.hearts || []).includes(active) ? c.hearts.filter(h => h !== active) : [...(c.hearts || []), active]; save('bcomments'); } renderApp(); break; }
     case 'delc': { const c = bcomments().find(x => x.id === d.id && x.by === active); if (c) { noteRemoved('bcomments', c); mem.bcomments = bcomments().filter(x => x.id !== d.id); save('bcomments'); } renderApp(); break; }
     case 'ciedit': editCheckin = !editCheckin; renderApp(); break;
+    case 'foodlog': foodSheet = { food: d.id || null }; if (!(appTab === 'lists' && listTab === 'foods')) { appTab = 'lists'; listTab = 'foods'; } renderApp(); $('appMain').scrollTop = 0; break;
+    case 'foodcancel': foodSheet = null; renderApp(); break;
+    case 'foodfilter': foodFilter = d.k; renderApp(); break;
+    case 'foodopen': foodOpen = foodOpen === d.id ? null : d.id; renderApp(); break;
+    case 'fooddel': { const e2 = foodLog().find(x => x.id === d.id); if (e2) { noteRemoved('foods', e2); mem.foods = foodLog().filter(x => x.id !== d.id); save('foods'); } renderApp(); break; }
+    case 'foodcsv': foodCsv(); break;
     case 'ciopen': ciOpen = !ciOpen; renderApp(); break;
     case 'quick': quickMode = d.m; renderApp(); break;
     case 'homecard': { const h = store.get('homeHide', []); store.set('homeHide', h.includes(d.k) ? h.filter(x => x !== d.k) : [...h, d.k]); renderApp(); break; }
@@ -6038,6 +6184,16 @@ function onAppSubmit(e) {
       load('goals', []).push(g); noteAdded('goals', g); save('goals'); break;
     }
     case 'goalcfg': { const fg = familyGoal(); fg.reward = v('reward') || fg.reward; fg.target = Math.max(10, parseInt(v('target'), 10) || fg.target); save('familyGoal'); editGoal = false; break; }
+    case 'food': {
+      if (!v('food')) { appToast('Type or pick a food first'); return; }
+      const r = saveFood(v('food'), (f.querySelector('input[name=like]:checked') || {}).value, (f.querySelector('input[name=react]:checked') || {}).value, v('note'), v('date'));
+      foodSheet = null; if (r) appToast(r.isNew ? `First taste of ${r.f.name.toLowerCase()}!${r.got ? ' +' + r.got : ''}` : `${r.f.name} logged`); break;
+    }
+    case 'foodcustom': {
+      if (!v('name')) return;
+      const nm = titleCase(v('name')); if (!allFoods().some(x => x.name.toLowerCase() === nm.toLowerCase())) { mem.foodsCustom = [...customFoods(), { id: 'c-' + nm.toLowerCase().replace(/[^a-z]+/g, '-'), name: nm, cat: 'other', tip: 'flavor', allergen: null }]; save('foodsCustom'); }
+      appToast(`${nm} added to the library`); break;
+    }
     case 'meal': {
       if (!v('dish')) return;
       const m = mealPlan(), day = +v('day'), isNew = !m.days[day];
@@ -6098,6 +6254,8 @@ function onAppChange(e) {
     resizeToBlob(e.target.files[0], 200).then(pic => { const fc = faces(); fc[active] = pic.dataUrl; mem.faces = fc; save('faces'); renderApp(); appToast('Photo saved'); }).catch(() => appToast("That photo couldn't be read."));
     return;
   }
+  if (e.target.name === 'like' || e.target.name === 'react') { e.target.closest('.chips').querySelectorAll('.chip').forEach(l => l.classList.toggle('on', l.querySelector('input').checked)); return; }
+  if (e.target.name === 'food' && e.target.form && e.target.form.dataset.form === 'food') { const nm = e.target.value.trim().toLowerCase(), f = allFoods().find(x => x.name.toLowerCase() === nm), fs = e.target.form; if (f) { foodSheet = { food: f.id, like: (fs.querySelector('input[name=like]:checked') || {}).value, react: (fs.querySelector('input[name=react]:checked') || {}).value }; renderApp(); } return; }
   if (e.target.name !== 'mood') return;
   e.target.closest('form').querySelectorAll('.moods .chip').forEach(l => l.classList.toggle('on', l.querySelector('input').checked));
 }

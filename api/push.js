@@ -1,7 +1,7 @@
 // The app calls this when something happens (a message, a check-in, a photo, a prayer candle).
 // It sends a notification to the other person's phones in the same family. Never to anyone else.
 const { env, rest, sendAll } = require('./_lib');
-const KINDS = new Set(['message', 'checkin', 'photo', 'prayer', 'test']);
+const KINDS = new Set(['message', 'checkin', 'photo', 'prayer', 'food', 'test']);
 
 module.exports = async (req, res) => {
   if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
