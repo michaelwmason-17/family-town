@@ -4007,6 +4007,7 @@ function chefPrompt(kind, input) {
   return `Read this recipe (from a screenshot or pasted text) and return it cleanly: title, servings, minutes (total time, 0 if unknown), every ingredient with its amount as written, and the steps in order (one step per item). "notes" holds any useful tips from the source, or an empty string. If no recipe is present, return an empty title.${input ? `\n\nRecipe text:\n${input.slice(0, 8000)}` : ''}`;
 }
 async function chefAsk(kind, input, imageBlob) {
+  if (!CHEF_AI) throw Object.assign(new Error('off'), { code: 'off' });
   const schema = kind === 'parse' ? RECIPE_SCHEMA : CHEF_SCHEMA;
   // On the website: the family's own /api/chef function (needs ANTHROPIC_API_KEY in Vercel)
   if (window.FT_WEB && FT_WEB.chef) {
@@ -4021,16 +4022,6 @@ async function chefAsk(kind, input, imageBlob) {
   if (imageBlob) { const lim = sample.limits ? await sample.limits() : { images: true }; if (!lim.images) throw Object.assign(new Error('no images'), { code: 'unavailable' }); opts.images = [imageBlob]; }
   return sample.json(`${chefPrompt(kind, input)}\n\nReply with only JSON matching this schema: ${JSON.stringify(schema)}`, opts);
 }
-function localIdeas(kind, pantry) {
-  const pool = [...DINNER_IDEAS.map(([t, ing]) => ({ title: t, ingredients: ing.split(',').map(s => s.trim()), steps: [] })), ...recipes().map(r => ({ title: r.title, ingredients: r.ingredients, steps: r.steps }))];
-  const recent = new Set(dinnerLog().slice(-10).map(e => e.dish.toLowerCase()));
-  if (kind === 'pantry') {
-    const have = String(pantry).toLowerCase().split(/[,\n]+|\band\b/).map(s => s.trim()).filter(s => s.length > 1);
-    return pool.map(p => { const uses = p.ingredients.filter(i => have.some(h => i.toLowerCase().includes(h) || h.includes(i.toLowerCase().split(' ').pop()))), missing = p.ingredients.filter(i => !uses.includes(i));
-      return { ...p, uses, missing, why: uses.length ? `Uses your ${uses.slice(0, 3).join(', ').toLowerCase()}.` : '', minutes: 30 }; }).filter(p => p.uses.length).sort((a, b) => b.uses.length - a.uses.length || a.missing.length - b.missing.length).slice(0, 4);
-  }
-  return pool.filter(p => !recent.has(p.title.toLowerCase())).sort(() => Math.random() - .5).slice(0, 5).map(p => ({ ...p, why: 'From your recipe box and family favorites.', minutes: 30, uses: [], missing: [] }));
-}
 async function runChef(kind, pantry) {
   chef = { state: 'busy', kind, ideas: [], msg: '', pantry: pantry || chef.pantry };
   renderApp();
@@ -4040,28 +4031,17 @@ async function runChef(kind, pantry) {
     if (!chef.ideas.length) { chef.ideas = localIdeas(kind, pantry); chef.ai = false; }
   } catch (e) {
     chef.ideas = localIdeas(kind, pantry); chef.state = 'done'; chef.ai = false;
-    chef.msg = e && e.code === 'not_set_up' ? 'Smart Chef ideas turn on once the AI key is added in Vercel. Here are ideas from your recipe box for now.' : e && e.code === 'unavailable' ? 'Here are ideas from your recipe box and family favorites.' : "The Chef couldn't connect just now. Here are some built-in ideas.";
-    if (kind === 'pantry' && !chef.ideas.length) chef.msg += " Nothing matched yet. Try listing a few more things you have.";
+    chef.msg = e && e.code === 'off' ? '' : e && e.code === 'not_set_up' ? 'Smart Chef ideas turn on once the AI key is added in Vercel. Here are ideas from your recipe box for now.' : e && e.code === 'unavailable' ? 'Here are ideas from your recipe box and family favorites.' : "The Chef couldn't connect just now. Here are some built-in ideas.";
+    if (kind === 'pantry' && !chef.ideas.length) chef.msg = (chef.msg ? chef.msg + ' ' : '') + 'Nothing matched yet. Try listing a few more things you have, like a protein and a vegetable.';
   }
   if (appOpen) renderApp();
 }
-async function importRecipeShot(file) {
-  appToast('Reading the recipe...'); recipeEdit = { title: '', ingredients: '', steps: '', reading: true }; mealsTab = 'recipes'; renderApp();
-  try {
-    const pic = await resizeToBlob(file, 1600), r = await chefAsk('parse', '', pic.blob);
-    if (!r || !r.title) throw Object.assign(new Error('none'), { code: 'empty' });
-    recipeEdit = { title: r.title, ingredients: (r.ingredients || []).join('\n'), steps: (r.steps || []).join('\n'), minutes: r.minutes || '', servings: r.servings || '', notes: r.notes || '', imported: true };
-    appToast('Got it! Check it over, then save.');
-  } catch (e) {
-    recipeEdit = { title: '', ingredients: '', steps: '', msg: e && e.code === 'empty' ? "I couldn't find a recipe in that picture. Try a clearer screenshot, or type it in." : e && (e.code === 'not_set_up' || e.code === 'unavailable') ? 'Reading screenshots needs the AI key in Vercel. You can type or paste the recipe here for now.' : "That screenshot couldn't be read just now. Try again, or type it in." };
-  }
-  renderApp();
-}
 
 // ----- screens -----
-const ideaCard = (it, i) => `<div class="idea"><div class="row2" style="justify-content:space-between; align-items:flex-start"><div><div style="font-weight:800">${esc(it.title)}</div><div class="muted2" style="font-size:13px">${it.minutes ? it.minutes + ' min &middot; ' : ''}${esc(it.why || '')}</div></div></div>
+const ideaCard = (it, i) => `<div class="idea"><div class="row2" style="justify-content:space-between; align-items:flex-start"><div><div style="font-weight:800">${esc(it.title)}</div><div class="muted2" style="font-size:13px">${it.minutes ? (it.minutes >= 240 ? 'slow cooker' : it.minutes + ' min') + ' &middot; ' : ''}${esc(it.why || '')}</div></div></div>
+  ${chef.open === i ? `<div class="recipe-body" style="padding-top:8px"><div class="eyebrow" style="margin:4px 0">Ingredients</div><ul class="recipe-list">${(it.ingredients || []).map(x => `<li>${esc(x)}</li>`).join('')}</ul>${(it.steps || []).length ? `<div class="eyebrow" style="margin:8px 0 4px">Steps</div><ol class="recipe-list">${it.steps.map(x => `<li>${esc(x)}</li>`).join('')}</ol>` : ''}</div>` : ''}
   ${it.missing && it.missing.length ? `<div class="muted2" style="font-size:13px; margin-top:4px"><b>Need:</b> ${esc(it.missing.join(', '))}</div>` : ''}
-  <div class="row2" style="margin-top:8px; flex-wrap:wrap"><button class="btn sm" data-act="ideaplan" data-i="${i}">Plan it</button><button class="btn ghost sm" data-act="ideasave" data-i="${i}">Save recipe</button>${(it.missing && it.missing.length) || (it.ingredients && it.ingredients.length) ? `<button class="btn ghost sm" data-act="ideagroc" data-i="${i}">${it.missing && it.missing.length ? 'Add what I need' : 'Add to groceries'}</button>` : ''}</div></div>`;
+  <div class="row2" style="margin-top:8px; flex-wrap:wrap"><button class="btn sm" data-act="ideaplan" data-i="${i}">Plan it</button>${(it.steps || []).length ? `<button class="btn ghost sm" data-act="ideaopen" data-i="${i}">${chef.open === i ? 'Hide recipe' : 'See recipe'}</button>` : ''}<button class="btn ghost sm" data-act="ideasave" data-i="${i}">Save recipe</button>${(it.missing && it.missing.length) || (it.ingredients && it.ingredients.length) ? `<button class="btn ghost sm" data-act="ideagroc" data-i="${i}">${it.missing && it.missing.length ? 'Add what I need' : 'Add to groceries'}</button>` : ''}</div></div>`;
 function chefCard() {
   return `<section class="card chef-card"><div class="card-h"><span class="eyebrow">Ask the Chef</span>${chef.state === 'done' ? '<button class="link" data-act="chefclear">Clear</button>' : ''}</div>
     <div class="row2" style="flex-wrap:wrap"><button class="btn" data-act="chefideas" ${chef.state === 'busy' ? 'disabled' : ''}>💡 Give me ideas</button></div>
@@ -4083,7 +4063,8 @@ function madeForm() {
 function recipeForm() {
   const r = recipeEdit;
   return `<section class="card" id="recipeForm"><div class="card-h"><span class="eyebrow">${r.id ? 'Edit recipe' : r.imported ? 'Imported: check it over' : 'New recipe'}</span><button class="link" data-act="recipecancel">Cancel</button></div>
-    ${r.reading ? '<p class="muted2" style="margin:0">Reading your screenshot...</p>' : `${r.msg ? `<p class="muted2" style="margin:0 0 10px">${esc(r.msg)}</p>` : ''}
+    ${r.reading ? '<p class="muted2" style="margin:0">Reading your screenshot on this phone... <b id="ocrProg">starting</b></p><p class="muted2" style="margin:6px 0 0; font-size:13px">This takes about 10-20 seconds the first time.</p>' : `${r.msg ? `<p class="muted2" style="margin:0 0 10px">${esc(r.msg)}</p>` : ''}
+    ${!r.id && !r.imported ? `<form class="stack2" data-form="recipepaste" style="margin-bottom:14px"><label class="muted2" for="pasteIn">Paste a whole recipe and I'll sort it out:</label><textarea class="in" id="pasteIn" name="paste" rows="4" placeholder="Paste the recipe here (title, ingredients, steps)"></textarea><button class="btn ghost">Fill it in</button></form>` : ''}
     <form class="stack2" data-form="recipe"><input type="hidden" name="id" value="${esc(r.id || '')}">
       <input class="in" name="title" maxlength="80" value="${esc(r.title || '')}" placeholder="Grandma's enchiladas" aria-label="Recipe name">
       <div class="row2"><input class="in" name="minutes" type="number" inputmode="numeric" min="0" max="999" value="${esc(r.minutes || '')}" placeholder="Minutes" aria-label="Minutes"><input class="in" name="servings" type="number" inputmode="numeric" min="0" max="50" value="${esc(r.servings || '')}" placeholder="Serves" aria-label="Servings"></div>
@@ -4098,13 +4079,13 @@ function recipeDetail(r) {
     <div class="eyebrow" style="margin:6px 0">Ingredients</div><ul class="recipe-list">${r.ingredients.map(x => `<li>${esc(x)}</li>`).join('')}</ul>
     ${r.steps.length ? `<div class="eyebrow" style="margin:10px 0 6px">Steps</div><ol class="recipe-list">${r.steps.map(x => `<li>${esc(x)}</li>`).join('')}</ol>` : ''}
     ${r.notes ? `<p class="muted2">${esc(r.notes)}</p>` : ''}${r.source && /^https?:\/\//.test(r.source) ? `<p><a href="${esc(r.source)}" target="_blank" rel="noopener">Original recipe</a></p>` : ''}
-    <div class="row2" style="flex-wrap:wrap; margin-top:10px"><button class="btn sm" data-act="recplan" data-id="${r.id}">Plan it</button><button class="btn ghost sm" data-act="recgroc" data-id="${r.id}">Add to groceries</button><button class="btn ghost sm" data-act="recmade" data-id="${r.id}">We made it</button><button class="btn ghost sm" data-act="recedit" data-id="${r.id}">Edit</button><button class="link" data-act="recdel" data-id="${r.id}" style="color:var(--a-soft)">Delete</button></div></div>`;
+    <div class="row2" style="flex-wrap:wrap; margin-top:10px"><button class="btn sm" data-act="recplan" data-id="${r.id}">Plan it</button><button class="btn ghost sm" data-act="recgroc" data-id="${r.id}">Add to groceries</button><button class="btn ghost sm" data-act="recmade" data-id="${r.id}">We made it</button>${r.builtIn ? `<button class="btn ghost sm" data-act="cbsave" data-id="${r.id}">Save to my recipes</button>` : `<button class="btn ghost sm" data-act="recedit" data-id="${r.id}">Edit</button><button class="link" data-act="recdel" data-id="${r.id}" style="color:var(--a-soft)">Delete</button>`}</div></div>`;
 }
 function dayPicker(act, extra) {
   const ti = todayIdx();
   return `<div class="chips" style="margin-top:8px">${Array.from({ length: 7 }, (_, i) => i).filter(i => i >= ti).map(i => `<button class="chip" data-act="${act}" data-day="${i}" ${extra}>${i === ti ? 'Tonight' : weekDay(i).toLocaleDateString('en-US', { weekday: 'short' })}</button>`).join('')}</div>`;
 }
-let pickDayFor = null;   // { kind: 'idea'|'recipe', i|id }
+let pickDayFor = null, cbFilter = 'all';   // { kind: 'idea'|'recipe', i|id }
 function mealsScreen() {
   const segs = [['plan', 'This week'], ['recipes', `Recipes (${recipes().length})`], ['made', 'Dinner log']];
   const seg = `<div class="seg" style="margin-bottom:12px">${segs.map(([k, l]) => `<button class="chip ${mealsTab === k ? 'on' : ''}" data-act="mealstab" data-k="${k}">${l}</button>`).join('')}</div>`;
@@ -4114,9 +4095,12 @@ function mealsScreen() {
     const list = recipes().slice().sort((a, b) => a.title.localeCompare(b.title));
     body = `${recipeEdit ? recipeForm() : `<section class="card"><div class="card-h"><span class="eyebrow">Add a recipe</span></div>
         <div class="row2" style="flex-wrap:wrap"><label class="btn" style="cursor:pointer">📷 From a screenshot<input type="file" accept="image/*" hidden data-recipeshot="1"></label><button class="btn ghost" data-act="recnew">Type or paste it</button></div>
-        <p class="muted2" style="margin:10px 0 0; font-size:13px">Screenshot a recipe from Instagram, a website, or a cookbook, and the Chef fills it in for you.</p></section>`}
+        <p class="muted2" style="margin:10px 0 0; font-size:13px">Screenshot a recipe from Instagram, a website, or a cookbook. Your phone reads the text and fills it in for you (free, nothing leaves your phone).</p></section>`}
       <section class="card"><div class="card-h"><span class="eyebrow">Recipe box</span><span class="muted2">${list.length}</span></div>
-        ${list.map(r => `<div class="food-row"><button class="food-main" data-act="recopen" data-id="${r.id}"><span style="flex:1; text-align:left"><b>${esc(r.title)}</b><br><span class="muted2" style="font-size:13px">${r.minutes ? r.minutes + ' min &middot; ' : ''}${madeCount(r.title) ? `made ${madeCount(r.title)}&times;` : 'not made yet'}</span></span><span class="muted2">${recipeOpen === r.id ? '&#9662;' : '&#9656;'}</span></button>${recipeOpen === r.id ? recipeDetail(r) : ''}</div>`).join('') || '<p class="empty">No recipes yet. Add one from a screenshot, or save an idea from the Chef.</p>'}</section>`;
+        ${list.map(r => `<div class="food-row"><button class="food-main" data-act="recopen" data-id="${r.id}"><span style="flex:1; text-align:left"><b>${esc(r.title)}</b><br><span class="muted2" style="font-size:13px">${r.minutes ? r.minutes + ' min &middot; ' : ''}${madeCount(r.title) ? `made ${madeCount(r.title)}&times;` : 'not made yet'}</span></span><span class="muted2">${recipeOpen === r.id ? '&#9662;' : '&#9656;'}</span></button>${recipeOpen === r.id ? recipeDetail(r) : ''}</div>`).join('') || '<p class="empty">No recipes yet. Add one from a screenshot, or save one from the family cookbook below.</p>'}</section>
+      ${(() => { const CBF = [['all', 'All'], ['quick', 'Quick'], ['sheetpan', 'Sheet pan'], ['onepot', 'One pot'], ['slow', 'Slow cooker'], ['veg', 'Meatless'], ['baby', 'Margo-friendly']], cb = cookbookRecipes().filter(r => cbFilter === 'all' || r.tags.includes(cbFilter));
+        return `<section class="card"><div class="card-h"><span class="eyebrow">Family cookbook</span><span class="muted2">${cb.length}</span></div><div class="chips" style="margin-bottom:8px">${CBF.map(([k, l]) => `<button class="chip ${cbFilter === k ? 'on' : ''}" data-act="cbfilter" data-k="${k}">${l}</button>`).join('')}</div>
+          ${cb.map(r => `<div class="food-row"><button class="food-main" data-act="recopen" data-id="${r.id}"><span style="flex:1; text-align:left"><b>${esc(r.title)}</b><br><span class="muted2" style="font-size:13px">${r.minutes >= 240 ? 'slow cooker' : r.minutes + ' min'}${r.tags.includes('baby') ? ' &middot; Margo-friendly' : ''}${madeCount(r.title) ? ` &middot; made ${madeCount(r.title)}&times;` : ''}</span></span><span class="muted2">${recipeOpen === r.id ? '&#9662;' : '&#9656;'}</span></button>${recipeOpen === r.id ? recipeDetail(r) : ''}</div>`).join('')}</section>`; })()}`;
   } else if (mealsTab === 'made') {
     const log = dinnerLog().slice().sort((a, b) => (b.date || '').localeCompare(a.date || '') || b.at - a.at), counts = {};
     for (const e of log) counts[e.dish] = (counts[e.dish] || 0) + 1;
@@ -4132,6 +4116,196 @@ function mealsScreen() {
       <section class="card"><form class="stack2" data-form="meal"><span class="eyebrow">Plan a dinner yourself (+3)</span><select class="in" name="day" aria-label="Day">${Array.from({ length: 7 }, (_, i) => `<option value="${i}"${i === ti ? ' selected' : ''}>${label(i)}</option>`).join('')}</select><input class="in" name="dish" maxlength="40" placeholder="Fish tacos" aria-label="Dinner" list="recipeNames"><datalist id="recipeNames">${recipes().map(r => `<option value="${esc(r.title)}">`).join('')}</datalist><input class="in" name="ing" maxlength="140" placeholder="Tortillas, cod, cabbage, limes" aria-label="Ingredients"><button class="btn">Save dinner</button></form></section>`;
   }
   return seg + picker + body;
+}
+
+
+// ---------- The family cookbook: built-in weeknight dinners (no AI needed) ----------
+// [title, minutes, tags, ingredients (| separated), steps (| separated)]. Tags: quick, sheetpan, slow, onepot, grill, veg, baby (a soft, unsalted portion works for Margo).
+const COOKBOOK = [
+  ['Lemon garlic chicken thighs', 35, 'sheetpan baby', '1.5 lb chicken thighs|2 lemons|4 cloves garlic|1 lb baby potatoes|2 cups broccoli|2 tbsp olive oil', 'Heat oven to 425°F.|Toss potatoes and broccoli with oil, salt, and pepper on a sheet pan.|Rub chicken with garlic, lemon zest and juice; nestle on the pan.|Roast 25-30 min until chicken reaches 165°F.'],
+  ['Sheet-pan salmon and veggies', 25, 'sheetpan quick baby', '4 salmon fillets|1 lb asparagus|1 pint cherry tomatoes|1 lemon|2 tbsp olive oil', 'Heat oven to 400°F.|Toss asparagus and tomatoes with oil, salt, and pepper.|Add salmon, top with lemon slices.|Roast 12-15 min until salmon flakes.'],
+  ['Fish tacos', 25, 'quick', '1 lb cod|8 tortillas|2 cups shredded cabbage|2 limes|1 avocado|1/2 cup sour cream|1 tsp chili powder', 'Season cod with chili powder, salt, and lime juice.|Pan-sear 3-4 min per side, then flake.|Mix sour cream with lime juice for the sauce.|Fill warm tortillas with fish, cabbage, avocado, and sauce.'],
+  ['Turkey chili', 45, 'onepot baby', '1 lb ground turkey|1 onion|2 cans black beans|1 can diced tomatoes|1 can tomato sauce|2 tbsp chili powder|1 tsp cumin|1 cup shredded cheddar', 'Brown turkey with diced onion.|Add spices, beans, tomatoes, and sauce.|Simmer 25 min.|Top with cheddar. Mash some beans for Margo.'],
+  ['Chicken pesto pasta', 25, 'quick', '1 lb penne|1 lb chicken breast|1/2 cup pesto|1 cup cherry tomatoes|1/2 cup parmesan', 'Cook pasta.|Sear diced chicken until cooked through.|Toss pasta, chicken, pesto, and halved tomatoes.|Finish with parmesan.'],
+  ['Burrito bowls', 30, 'quick baby', '1.5 cups rice|1 lb chicken breast|1 can black beans|1 cup corn|1 avocado|1 cup salsa|1 cup shredded cheese|1 lime', 'Cook rice; stir in lime juice.|Season and sear chicken, then slice.|Warm beans and corn.|Build bowls with salsa, cheese, and avocado.'],
+  ['Breakfast for dinner', 20, 'quick baby', '8 eggs|1 lb bacon|2 cups pancake mix|1 cup milk|2 cups berries', 'Cook bacon in the oven at 400°F for 15 min.|Mix and cook pancakes.|Scramble eggs.|Serve with berries.'],
+  ['Clam chowder and sourdough', 40, 'onepot', '2 cans chopped clams|4 slices bacon|1 onion|2 potatoes|2 stalks celery|2 cups milk|1 cup cream|2 tbsp flour|1 loaf sourdough', 'Cook diced bacon; soften onion and celery in the fat.|Stir in flour, then clam juice, milk, and diced potatoes.|Simmer 15 min until potatoes are tender.|Add clams and cream; warm through. Serve with sourdough.'],
+  ['Homemade pizza', 30, 'baby', '1 lb pizza dough|1 cup pizza sauce|2 cups mozzarella|pepperoni|fresh basil', 'Heat oven to 475°F.|Stretch dough on an oiled pan.|Top with sauce, cheese, and pepperoni.|Bake 12-15 min; add basil.'],
+  ['Teriyaki chicken stir-fry', 25, 'quick', '1.5 lb chicken thighs|1/2 cup teriyaki sauce|2 cups broccoli|2 carrots|1 cup snap peas|1.5 cups rice', 'Cook rice.|Stir-fry diced chicken until browned.|Add vegetables and cook 4 min.|Toss with teriyaki and serve over rice.'],
+  ['Steak and artichokes', 40, 'grill', '1.5 lb steak|2 artichokes|2 lemons|4 tbsp butter|2 cloves garlic', 'Steam artichokes 30-35 min until a leaf pulls out easily.|Season steak; sear or grill to your liking, then rest.|Melt butter with garlic and lemon for dipping.|Slice steak against the grain.'],
+  ['Chicken noodle soup', 40, 'onepot baby', '1 lb chicken breast|8 cups chicken broth|3 carrots|3 stalks celery|1 onion|8 oz egg noodles', 'Simmer chicken in broth 20 min; remove and shred.|Add diced carrots, celery, and onion; cook 10 min.|Add noodles; cook until tender.|Return chicken to the pot.'],
+  ['Shrimp scampi', 20, 'quick', '1 lb shrimp|12 oz linguine|4 cloves garlic|4 tbsp butter|1 lemon|1/4 cup parsley|1/2 cup parmesan', 'Cook pasta.|Sauté garlic in butter, add shrimp and cook 2 min per side.|Add lemon juice and a splash of pasta water.|Toss with pasta, parsley, and parmesan.'],
+  ['Slow cooker pot roast', 480, 'slow baby', '3 lb chuck roast|1.5 lb potatoes|4 carrots|1 onion|2 cups beef broth|2 tbsp tomato paste', 'Season and sear roast.|Put vegetables in slow cooker, roast on top.|Whisk broth with tomato paste; pour over.|Cook on low 8 hours. Shred soft pieces for Margo.'],
+  ['Chicken Caesar salad', 20, 'quick', '1 lb chicken breast|2 heads romaine|1/2 cup Caesar dressing|1 cup croutons|1/2 cup parmesan', 'Season and grill or sear chicken; slice.|Chop romaine.|Toss with dressing, croutons, and parmesan.|Top with chicken.'],
+  ['Grilled cheese and tomato soup', 20, 'quick veg', '8 slices bread|8 slices cheddar|4 tbsp butter|2 cans tomato soup', 'Warm soup.|Butter bread; fill with cheese.|Cook in a skillet until golden on both sides.|Cut into strips for dipping.'],
+  ['Baked ziti', 50, 'baby', '1 lb ziti|1 lb Italian sausage|1 jar marinara|15 oz ricotta|2 cups mozzarella|1/2 cup parmesan', 'Heat oven to 375°F; cook pasta.|Brown sausage; stir in marinara.|Mix pasta, sauce, and ricotta; top with mozzarella and parmesan.|Bake 20-25 min until bubbly.'],
+  ['Calamari night', 25, 'quick', '1 lb calamari rings|1 cup flour|2 lemons|1 cup marinara|1 bag salad greens', 'Toss calamari in seasoned flour.|Fry in hot oil 1-2 min until golden.|Serve with lemon wedges and warm marinara.|Add a simple green salad.'],
+  ['Chicken enchiladas', 45, 'baby', '2 cups cooked shredded chicken|8 tortillas|1 can enchilada sauce|2 cups shredded cheese|1 onion', 'Heat oven to 375°F.|Mix chicken, half the cheese, and diced onion.|Roll into tortillas; place in a dish.|Cover with sauce and cheese; bake 20 min.'],
+  ['Beef tacos', 20, 'quick baby', '1 lb ground beef|1 packet taco seasoning|8 taco shells|1 cup shredded lettuce|1 tomato|1 cup shredded cheese|1/2 cup sour cream', 'Brown beef; add seasoning and water.|Simmer 5 min.|Warm shells.|Fill with beef and toppings.'],
+  ['Spaghetti and meatballs', 40, 'baby', '1 lb spaghetti|1 lb ground beef|1/2 cup breadcrumbs|1 egg|1/2 cup parmesan|1 jar marinara', 'Mix beef, breadcrumbs, egg, and parmesan; roll into balls.|Brown meatballs, then simmer in marinara 15 min.|Cook spaghetti.|Serve meatballs and sauce over pasta.'],
+  ['Honey garlic salmon', 20, 'quick baby', '4 salmon fillets|3 tbsp honey|3 tbsp soy sauce|3 cloves garlic|1.5 cups rice|2 cups green beans', 'Cook rice; steam green beans.|Whisk honey, soy sauce, and garlic.|Sear salmon 4 min per side.|Pour sauce over and simmer 1 min. (Skip the honey on Margo\'s piece.)'],
+  ['Chicken quesadillas', 15, 'quick baby', '8 tortillas|2 cups cooked chicken|2 cups shredded cheese|1 bell pepper|1/2 cup salsa|1/2 cup sour cream', 'Fill tortillas with chicken, cheese, and sliced pepper.|Cook in a skillet until golden and melty.|Cut into wedges.|Serve with salsa and sour cream.'],
+  ['Pork chops with applesauce', 30, 'baby', '4 pork chops|2 cups applesauce|1 lb green beans|1 lb baby potatoes|2 tbsp butter', 'Boil potatoes until tender; toss with butter.|Season and sear chops 4-5 min per side to 145°F.|Steam green beans.|Serve with warm applesauce.'],
+  ['Shepherd\'s pie', 60, 'baby', '1 lb ground beef|1 onion|2 cups frozen peas and carrots|1 cup beef broth|2 tbsp tomato paste|2 lb potatoes|1/2 cup milk|4 tbsp butter', 'Boil and mash potatoes with milk and butter.|Brown beef and onion; add vegetables, broth, and tomato paste; simmer 10 min.|Spread in a dish, top with potatoes.|Bake at 400°F for 20 min.'],
+  ['Chicken fried rice', 20, 'quick', '3 cups cooked rice (day-old is best)|1 lb chicken breast|3 eggs|1 cup frozen peas and carrots|3 green onions|3 tbsp soy sauce', 'Cook diced chicken; set aside.|Scramble eggs; set aside.|Fry rice with vegetables until hot.|Add chicken, eggs, soy sauce, and green onions.'],
+  ['Black bean soup', 35, 'onepot veg baby', '3 cans black beans|1 onion|2 cloves garlic|4 cups vegetable broth|1 tsp cumin|1 lime|1/2 cup sour cream', 'Soften onion and garlic.|Add beans, broth, and cumin; simmer 20 min.|Blend half the soup for creaminess.|Finish with lime and a dollop of sour cream.'],
+  ['Veggie stir-fry with tofu', 25, 'quick veg', '14 oz firm tofu|2 cups broccoli|1 bell pepper|1 cup snap peas|3 tbsp soy sauce|1 tbsp honey|1.5 cups rice', 'Cook rice.|Press and cube tofu; pan-fry until golden.|Stir-fry vegetables 4 min.|Toss with soy sauce and honey.'],
+  ['Lentil curry', 35, 'onepot veg baby', '1 cup red lentils|1 can coconut milk|1 can diced tomatoes|1 onion|2 cloves garlic|2 tbsp curry powder|3 cups spinach|1.5 cups rice', 'Soften onion and garlic; add curry powder.|Add lentils, tomatoes, coconut milk, and 2 cups water.|Simmer 20 min until lentils are soft.|Stir in spinach; serve over rice.'],
+  ['Chicken parmesan', 40, 'baby', '2 chicken breasts|1 cup breadcrumbs|1 egg|1 cup marinara|1 cup mozzarella|1/2 cup parmesan|12 oz spaghetti', 'Halve chicken breasts into thin cutlets.|Dip in egg, then breadcrumbs mixed with parmesan; pan-fry until golden.|Top with marinara and mozzarella; broil 3 min.|Serve with spaghetti.'],
+  ['Sausage and peppers', 30, 'sheetpan', '1 lb Italian sausage|3 bell peppers|1 onion|4 hoagie rolls|2 tbsp olive oil', 'Heat oven to 425°F.|Slice peppers and onion; toss with oil.|Roast with sausages 25 min.|Serve in rolls.'],
+  ['BBQ chicken drumsticks', 45, 'sheetpan baby', '3 lb chicken drumsticks|1 cup BBQ sauce|2 ears corn|1 bag coleslaw mix|1/2 cup coleslaw dressing', 'Heat oven to 425°F.|Roast seasoned drumsticks 30 min.|Brush with BBQ sauce; roast 10 more min.|Serve with corn and coleslaw.'],
+  ['Minestrone soup', 45, 'onepot veg baby', '1 onion|2 carrots|2 stalks celery|1 zucchini|1 can diced tomatoes|1 can cannellini beans|6 cups vegetable broth|1 cup small pasta|1/2 cup parmesan', 'Soften onion, carrot, and celery.|Add zucchini, tomatoes, beans, and broth; simmer 15 min.|Add pasta; cook until tender.|Top with parmesan.'],
+  ['Chicken pot pie', 55, 'baby', '2 cups cooked chicken|2 cups frozen mixed vegetables|1 can cream of chicken soup|1/2 cup milk|1 refrigerated pie crust', 'Heat oven to 400°F.|Mix chicken, vegetables, soup, and milk in a pie dish.|Top with crust; cut slits.|Bake 30-35 min until golden.'],
+  ['Mac and cheese with broccoli', 25, 'quick veg baby', '1 lb elbow macaroni|3 cups shredded cheddar|2 cups milk|3 tbsp butter|3 tbsp flour|3 cups broccoli', 'Cook pasta, adding broccoli for the last 3 min.|Melt butter, whisk in flour, then milk; simmer until thick.|Stir in cheese until smooth.|Combine with pasta and broccoli.'],
+  ['Greek chicken bowls', 30, 'quick', '1.5 lb chicken thighs|1 cup quinoa|1 cucumber|1 pint cherry tomatoes|1/2 cup feta|1 cup tzatziki|1 lemon|1 tsp oregano', 'Cook quinoa.|Season chicken with lemon, oregano, salt, and pepper; sear or grill.|Chop cucumber and tomatoes.|Build bowls with feta and tzatziki.'],
+  ['Stuffed bell peppers', 50, 'baby', '4 bell peppers|1 lb ground beef|1 cup cooked rice|1 can diced tomatoes|1 cup shredded cheese', 'Heat oven to 375°F.|Brown beef; mix with rice and tomatoes.|Stuff halved peppers; top with cheese.|Bake 30 min.'],
+  ['Pesto salmon with couscous', 20, 'quick', '4 salmon fillets|1/3 cup pesto|1 cup couscous|1 pint cherry tomatoes|1 lemon', 'Heat oven to 400°F.|Spread pesto on salmon; bake 12-15 min with tomatoes.|Make couscous with boiling water.|Finish with lemon.'],
+  ['Hamburgers and sweet potato fries', 35, 'grill baby', '1.5 lb ground beef|4 buns|4 slices cheddar|lettuce|1 tomato|2 sweet potatoes|2 tbsp olive oil', 'Heat oven to 425°F; roast sweet potato wedges 25 min.|Shape and season patties.|Grill or sear 4 min per side; add cheese.|Serve on buns with toppings.'],
+  ['Chicken tortilla soup', 35, 'onepot baby', '1 lb chicken breast|1 onion|1 can black beans|1 can diced tomatoes|1 cup corn|6 cups chicken broth|1 tsp cumin|tortilla chips|1 avocado', 'Soften onion; add broth, tomatoes, beans, corn, cumin, and chicken.|Simmer 20 min; shred chicken.|Squeeze in lime if you like.|Top with chips and avocado.'],
+  ['Sloppy joes', 25, 'quick baby', '1 lb ground beef|1 onion|1 can tomato sauce|2 tbsp ketchup|1 tbsp brown sugar|4 buns', 'Brown beef with onion.|Stir in sauce, ketchup, and brown sugar.|Simmer 10 min.|Serve on buns.'],
+  ['Shrimp tacos with mango salsa', 25, 'quick', '1 lb shrimp|8 tortillas|1 mango|1/2 red onion|1 jalapeño|2 limes|2 cups shredded cabbage', 'Dice mango, onion, and jalapeño; mix with lime for salsa.|Season shrimp; sear 2 min per side.|Warm tortillas.|Fill with cabbage, shrimp, and salsa.'],
+  ['Beef and broccoli', 25, 'quick', '1 lb flank steak|4 cups broccoli|1/3 cup soy sauce|2 tbsp brown sugar|1 tbsp cornstarch|2 cloves garlic|1.5 cups rice', 'Cook rice.|Slice steak thin; toss with cornstarch.|Sear beef in batches; set aside.|Cook broccoli, add garlic, soy, sugar, and beef; toss until glossy.'],
+  ['Chicken alfredo', 25, 'quick baby', '1 lb fettuccine|1 lb chicken breast|2 cups heavy cream|1 cup parmesan|3 tbsp butter|2 cloves garlic', 'Cook pasta.|Sear diced chicken.|Simmer cream, butter, and garlic; stir in parmesan.|Toss with pasta and chicken.'],
+  ['Egg fried rice with veggies', 15, 'quick veg', '3 cups cooked rice|4 eggs|2 cups frozen mixed vegetables|3 green onions|3 tbsp soy sauce', 'Scramble eggs; set aside.|Fry vegetables, then rice, until hot.|Add eggs, soy sauce, and green onions.|Serve right away.'],
+  ['Turkey meatloaf', 60, 'baby', '1.5 lb ground turkey|1 egg|3/4 cup breadcrumbs|1/2 cup milk|1 onion|1/2 cup ketchup|2 lb potatoes', 'Heat oven to 375°F.|Mix turkey, egg, breadcrumbs, milk, and diced onion; shape a loaf.|Top with ketchup; bake 50 min.|Serve with mashed potatoes.'],
+  ['Caprese chicken', 30, 'baby', '2 chicken breasts|8 oz fresh mozzarella|2 tomatoes|fresh basil|2 tbsp balsamic glaze|1 bag salad greens', 'Season and sear chicken until nearly done.|Top with tomato and mozzarella slices.|Cover until cheese melts.|Finish with basil and balsamic.'],
+  ['Pulled pork sandwiches', 480, 'slow baby', '3 lb pork shoulder|1 cup BBQ sauce|1 onion|6 buns|1 bag coleslaw mix', 'Put sliced onion and seasoned pork in slow cooker.|Cook on low 8 hours.|Shred and stir in BBQ sauce.|Serve on buns with slaw.'],
+  ['Chicken and dumplings', 50, 'onepot baby', '1 lb chicken thighs|6 cups chicken broth|2 carrots|2 stalks celery|1 onion|2 cups biscuit mix|2/3 cup milk', 'Simmer chicken and vegetables in broth 20 min; shred chicken.|Mix biscuit mix and milk.|Drop spoonfuls onto simmering soup.|Cover and cook 15 min.'],
+  ['Veggie quesadillas', 15, 'quick veg baby', '8 tortillas|2 cups shredded cheese|1 can black beans|1 cup corn|1 zucchini|1/2 cup salsa', 'Sauté diced zucchini.|Fill tortillas with beans, corn, zucchini, and cheese.|Cook until golden.|Serve with salsa.'],
+  ['Lemon herb cod with rice', 20, 'quick baby', '4 cod fillets|1 lemon|2 tbsp butter|2 cloves garlic|fresh parsley|1.5 cups rice|2 cups peas', 'Cook rice and peas.|Season cod; sear in butter 3 min per side.|Add garlic and lemon juice to the pan.|Spoon sauce over fish; add parsley.'],
+  ['Italian wedding soup', 45, 'onepot baby', '1 lb ground turkey|1/2 cup breadcrumbs|1 egg|8 cups chicken broth|1 cup small pasta|4 cups spinach|1/2 cup parmesan', 'Mix turkey, breadcrumbs, egg, and parmesan; roll tiny meatballs.|Bring broth to a simmer; add meatballs and cook 10 min.|Add pasta; cook until tender.|Stir in spinach.'],
+  ['Chicken satay with peanut sauce', 30, 'grill', '1.5 lb chicken thighs|1/3 cup peanut butter|3 tbsp soy sauce|1 lime|1 tbsp honey|1 cucumber|1.5 cups rice', 'Cook rice.|Thread or slice chicken; grill or sear until cooked.|Whisk peanut butter, soy, lime, honey, and warm water.|Serve with sauce and sliced cucumber.'],
+  ['Pasta primavera', 25, 'quick veg baby', '1 lb penne|1 zucchini|1 bell pepper|1 cup cherry tomatoes|2 cups broccoli|3 tbsp olive oil|1/2 cup parmesan', 'Cook pasta.|Sauté vegetables in olive oil until tender.|Toss with pasta and a splash of pasta water.|Top with parmesan.'],
+  ['Sweet potato and black bean tacos', 35, 'veg baby', '2 sweet potatoes|1 can black beans|8 tortillas|1 avocado|1/2 cup feta|1 lime|1 tsp cumin', 'Roast cubed sweet potato with cumin at 425°F for 25 min.|Warm beans.|Fill tortillas with potato and beans.|Top with avocado, feta, and lime.'],
+  ['Teriyaki salmon bowls', 25, 'quick baby', '4 salmon fillets|1/2 cup teriyaki sauce|1.5 cups rice|1 cucumber|1 avocado|1 cup edamame', 'Cook rice.|Brush salmon with teriyaki; bake at 400°F 12 min.|Warm edamame.|Build bowls with cucumber and avocado.'],
+  ['Chicken marsala', 35, '', '2 chicken breasts|8 oz mushrooms|3/4 cup marsala wine|1/2 cup chicken broth|1/4 cup flour|3 tbsp butter|12 oz pasta', 'Cook pasta.|Dredge thin chicken cutlets in flour; brown in butter.|Sauté mushrooms; add wine and broth; reduce by half.|Return chicken to the sauce.'],
+  ['Fajitas', 30, 'quick', '1.5 lb chicken breast or steak|3 bell peppers|1 onion|1 packet fajita seasoning|8 tortillas|1/2 cup sour cream|1 cup guacamole', 'Slice meat, peppers, and onion.|Toss with seasoning.|Sear meat, then vegetables, in a hot pan.|Serve in tortillas with toppings.'],
+  ['Baked potato bar', 60, 'veg baby', '4 russet potatoes|1 cup shredded cheddar|1/2 cup sour cream|4 slices bacon|2 cups broccoli|3 green onions', 'Bake potatoes at 400°F for 50-60 min.|Cook bacon; crumble.|Steam broccoli.|Split potatoes and load them up.'],
+  ['Chicken gyros', 30, 'quick', '1.5 lb chicken thighs|4 pita breads|1 cup tzatziki|1 tomato|1/2 red onion|1 cucumber|1 tsp oregano|1 lemon', 'Season chicken with oregano, lemon, salt, and pepper.|Sear and slice.|Warm pitas.|Fill with chicken, tzatziki, and vegetables.'],
+  ['Tuna melts', 15, 'quick', '2 cans tuna|1/3 cup mayo|1 stalk celery|8 slices bread|4 slices cheddar|2 tbsp butter', 'Mix tuna, mayo, and diced celery.|Spread on bread and top with cheese.|Grill in butter until golden.|Serve with soup or salad.'],
+  ['Pork tenderloin with roasted veggies', 40, 'sheetpan baby', '1.5 lb pork tenderloin|1 lb baby potatoes|3 carrots|1 lb brussels sprouts|2 tbsp olive oil|2 cloves garlic', 'Heat oven to 425°F.|Toss vegetables with oil; roast 15 min.|Rub pork with garlic, salt, and pepper; add to pan.|Roast 20-25 min to 145°F; rest and slice.'],
+  ['Chicken and rice casserole', 70, 'baby', '1.5 lb chicken thighs|1 cup rice|1 can cream of mushroom soup|2 cups chicken broth|2 cups broccoli|1 cup shredded cheddar', 'Heat oven to 375°F.|Mix rice, soup, and broth in a dish.|Lay chicken on top; cover with foil.|Bake 50 min; add broccoli and cheese for the last 15.'],
+  ['Shakshuka', 30, 'onepot veg', '6 eggs|1 can crushed tomatoes|1 onion|1 bell pepper|2 cloves garlic|1 tsp cumin|1 tsp paprika|1/2 cup feta|1 loaf crusty bread', 'Soften onion and pepper; add garlic and spices.|Add tomatoes; simmer 10 min.|Make wells; crack in eggs; cover and cook until set.|Top with feta; serve with bread.'],
+  ['Chicken lettuce wraps', 20, 'quick', '1 lb ground chicken|1 can water chestnuts|3 tbsp hoisin sauce|2 tbsp soy sauce|2 cloves garlic|1 head butter lettuce|3 green onions', 'Brown chicken with garlic.|Add chopped water chestnuts, hoisin, and soy.|Cook 3 min.|Spoon into lettuce cups; top with green onion.'],
+  ['Salmon cakes', 30, 'baby', '2 cans salmon|1 egg|1/2 cup breadcrumbs|2 green onions|1 lemon|1/3 cup mayo|1 bag salad greens', 'Mix salmon, egg, breadcrumbs, green onion, and lemon zest.|Shape into patties.|Pan-fry 3-4 min per side.|Serve with lemon mayo and salad.'],
+  ['Vegetable fried rice with pineapple', 20, 'quick veg', '3 cups cooked rice|1 cup pineapple chunks|1 cup frozen peas and carrots|3 eggs|3 tbsp soy sauce|3 green onions', 'Scramble eggs; set aside.|Fry pineapple and vegetables 3 min.|Add rice; fry until hot.|Stir in eggs, soy sauce, and green onions.'],
+  ['White chicken chili', 40, 'onepot baby', '1.5 lb chicken breast|2 cans white beans|4 cups chicken broth|1 can green chiles|1 onion|1 tsp cumin|4 oz cream cheese|1 cup corn', 'Soften onion; add broth, beans, chiles, corn, cumin, and chicken.|Simmer 20 min; shred chicken.|Stir in cream cheese until melted.|Serve with chips or cornbread.'],
+  ['Pierogies and kielbasa', 25, 'sheetpan', '1 box frozen pierogies|1 lb kielbasa|1 onion|2 cups green beans|2 tbsp butter', 'Heat oven to 425°F.|Toss pierogies, sliced kielbasa, onion, and green beans with butter.|Roast 20 min, flipping once.|Serve with sour cream.'],
+  ['Spinach and ricotta stuffed shells', 55, 'veg baby', '1 box jumbo shells|15 oz ricotta|2 cups spinach|1 egg|1 jar marinara|1.5 cups mozzarella|1/2 cup parmesan', 'Heat oven to 375°F; cook shells.|Mix ricotta, chopped spinach, egg, and parmesan.|Fill shells; set on marinara in a dish.|Top with mozzarella; bake 25 min.'],
+  ['Chicken sausage and kale pasta', 25, 'quick', '12 oz orecchiette|1 lb chicken sausage|1 bunch kale|3 cloves garlic|1/2 cup parmesan|1 lemon', 'Cook pasta.|Brown sliced sausage; add garlic and chopped kale until wilted.|Toss with pasta and a splash of pasta water.|Finish with lemon and parmesan.'],
+  ['Steak fajita bowls', 30, 'quick', '1 lb flank steak|2 bell peppers|1 onion|1.5 cups rice|1 can black beans|1 avocado|1 lime|1 cup salsa', 'Cook rice with lime.|Season and sear steak; slice thin.|Sauté peppers and onion.|Build bowls with beans, avocado, and salsa.'],
+  ['Coconut curry shrimp', 25, 'quick', '1 lb shrimp|1 can coconut milk|2 tbsp red curry paste|1 bell pepper|2 cups spinach|1 lime|1.5 cups rice', 'Cook rice.|Simmer coconut milk with curry paste.|Add sliced pepper and shrimp; cook 3-4 min.|Stir in spinach and lime.'],
+  ['Mushroom risotto', 40, 'veg baby', '1.5 cups arborio rice|8 oz mushrooms|1 onion|6 cups chicken or vegetable broth|1/2 cup parmesan|2 tbsp butter', 'Sauté mushrooms; set aside.|Soften onion; toast rice 1 min.|Add warm broth a ladle at a time, stirring, for 20 min.|Stir in mushrooms, butter, and parmesan.'],
+];
+const PANTRY_STAPLES = ['salt', 'pepper', 'olive oil', 'oil', 'water', 'butter', 'flour', 'sugar', 'brown sugar', 'garlic powder', 'onion powder', 'cumin', 'paprika', 'chili powder', 'oregano', 'italian seasoning', 'curry powder', 'cornstarch'];
+// Words that mean the same thing when matching what you have (chicken thighs = chicken)
+const FOOD_KEYS = [
+  ['chicken', ['chicken', 'drumstick', 'rotisserie']], ['turkey', ['turkey']], ['beef', ['ground beef', 'steak', 'chuck', 'beef', 'flank']], ['pork', ['pork', 'chops', 'tenderloin']],
+  ['sausage', ['sausage', 'kielbasa', 'pepperoni']], ['bacon', ['bacon']], ['salmon', ['salmon']], ['white fish', ['cod', 'tilapia', 'white fish', 'halibut']], ['tuna', ['tuna']],
+  ['shrimp', ['shrimp', 'prawn']], ['seafood', ['clam', 'calamari', 'squid', 'crab']], ['eggs', ['egg']], ['tofu', ['tofu']],
+  ['beans', ['black bean', 'kidney', 'pinto', 'white bean', 'cannellini', 'beans']], ['chickpeas', ['chickpea', 'garbanzo']], ['lentils', ['lentil']],
+  ['rice', ['rice', 'arborio']], ['pasta', ['pasta', 'penne', 'spaghetti', 'linguine', 'fettuccine', 'ziti', 'macaroni', 'noodle', 'shells', 'orecchiette', 'couscous']], ['quinoa', ['quinoa']],
+  ['tortillas', ['tortilla', 'taco shell']], ['bread', ['bread', 'bun', 'roll', 'pita', 'sourdough', 'crouton', 'breadcrumb']], ['pizza dough', ['pizza dough', 'pie crust', 'biscuit']],
+  ['potatoes', ['potato', 'pierog']], ['sweet potato', ['sweet potato']], ['broccoli', ['broccoli']], ['spinach', ['spinach']], ['kale', ['kale']], ['lettuce', ['lettuce', 'romaine', 'salad greens', 'greens']],
+  ['zucchini', ['zucchini']], ['peppers', ['bell pepper', 'peppers', 'jalapeño', 'chiles']], ['onion', ['onion', 'shallot']], ['garlic', ['garlic']], ['tomatoes', ['tomato', 'marinara', 'pizza sauce', 'salsa']],
+  ['carrots', ['carrot']], ['celery', ['celery']], ['corn', ['corn']], ['peas', ['peas', 'snap peas', 'edamame']], ['green beans', ['green bean']], ['mushrooms', ['mushroom']], ['cabbage', ['cabbage', 'coleslaw', 'slaw']],
+  ['asparagus', ['asparagus']], ['brussels sprouts', ['brussels']], ['cucumber', ['cucumber']], ['avocado', ['avocado', 'guacamole']], ['artichokes', ['artichoke']],
+  ['cheese', ['cheddar', 'mozzarella', 'parmesan', 'feta', 'cheese', 'ricotta']], ['cream cheese', ['cream cheese']], ['milk', ['milk']], ['cream', ['cream', 'half and half']], ['sour cream', ['sour cream']], ['yogurt', ['yogurt', 'tzatziki']],
+  ['lemon', ['lemon']], ['lime', ['lime']], ['mango', ['mango']], ['pineapple', ['pineapple']], ['berries', ['berries', 'berry', 'strawberr', 'blueberr']], ['apples', ['apple']],
+  ['coconut milk', ['coconut milk']], ['broth', ['broth', 'stock']], ['peanut butter', ['peanut butter']], ['pesto', ['pesto']], ['soy sauce', ['soy sauce', 'teriyaki', 'hoisin']], ['bbq sauce', ['bbq sauce']],
+];
+const FOOD_KEYS_FLAT = FOOD_KEYS.flatMap(([k, ws]) => ws.map(w => [w, k])).sort((a, b) => b[0].length - a[0].length);
+function foodKey(text) {
+  const t = ' ' + String(text).toLowerCase() + ' ';
+  if (/\b(broth|stock)\b/.test(t)) return 'broth';
+  if (/cream cheese/.test(t)) return 'cream cheese';
+  if (/sour cream/.test(t)) return 'sour cream';
+  if (/sweet potato/.test(t)) return 'sweet potato';
+  if (/coconut milk/.test(t)) return 'coconut milk';
+  if (/peanut butter/.test(t)) return 'peanut butter';
+  const hit = FOOD_KEYS_FLAT.find(([w]) => t.includes(w));
+  return hit ? hit[1] : null;
+}
+const isStaple = line => { const t = String(line).toLowerCase().replace(/^[\d\s./½¼¾-]+(?:(?:cups?|tbsp|tsp|lb|oz|cloves?|cans?|packets?|bunch|heads?|ears?|slices?|jars?|boxes?|bags?|pints?|stalks?)\b\.?)?\s*/, '').trim(); return PANTRY_STAPLES.some(s => t === s || t.startsWith(s + ' ')); };
+const cookbookRecipes = () => COOKBOOK.map(([title, minutes, tags, ing, steps]) => ({ id: 'cb-' + title.toLowerCase().replace(/[^a-z]+/g, '-'), title, minutes, tags: tags.split(' ').filter(Boolean), ingredients: ing.split('|'), steps: steps.split('|'), builtIn: true }));
+
+
+// ----- the no-AI Chef: ideas and "what I have" from the family cookbook + your recipe box -----
+const CHEF_AI = false;   // the Claude-powered Chef is off for now; flip to true (and add ANTHROPIC_API_KEY in Vercel) to use it
+const anyRecipe = id => recipes().find(r => r.id === id) || cookbookRecipes().find(r => r.id === id);
+const chefPool = () => { const mine = recipes(), titles = new Set(mine.map(r => r.title.toLowerCase())); return [...mine, ...cookbookRecipes().filter(r => !titles.has(r.title.toLowerCase()))]; };
+const mainOf = r => { for (const line of r.ingredients) { const k = foodKey(line); if (k && ['chicken', 'turkey', 'beef', 'pork', 'sausage', 'salmon', 'white fish', 'tuna', 'shrimp', 'seafood', 'eggs', 'tofu', 'beans', 'lentils', 'chickpeas'].includes(k)) return k; } return 'veg'; };
+function localIdeas(kind, pantry) {
+  const log = dinnerLog(), recent = new Set(log.slice(-10).map(e => e.dish.toLowerCase())), loved = new Set(log.filter(e => e.rate === 'again').map(e => e.dish.toLowerCase())), skip = new Set(log.filter(e => e.rate === 'skip').map(e => e.dish.toLowerCase()));
+  const pool = chefPool().filter(r => !skip.has(r.title.toLowerCase()));
+  const toIdea = (r, extra) => ({ title: r.title, minutes: r.minutes > 120 ? r.minutes : r.minutes, ingredients: r.ingredients, steps: r.steps, recipeId: r.id, uses: [], missing: [], why: '', ...extra });
+  if (kind === 'pantry') {
+    const have = new Set(String(pantry).split(/[,\n;]+|\band\b|\s&\s/).map(s => foodKey(s.trim()) || s.trim().toLowerCase()).filter(Boolean));
+    return pool.map(r => {
+      const uses = [], missing = [];
+      for (const line of r.ingredients) { if (isStaple(line)) continue; const k = foodKey(line); (k && have.has(k) ? uses : missing).push(line); }
+      const usedKeys = [...new Set(uses.map(foodKey))];
+      const m = mainOf(r), wantsProtein = [...have].some(k => ['chicken', 'turkey', 'beef', 'pork', 'sausage', 'salmon', 'white fish', 'tuna', 'shrimp', 'seafood', 'eggs', 'tofu'].includes(k));
+      return { r, uses, missing, usedKeys, score: usedKeys.length * 3 - missing.length + (loved.has(r.title.toLowerCase()) ? 1 : 0) - (wantsProtein && m !== 'veg' && !have.has(m) ? 3 : 0) };
+    }).filter(x => x.usedKeys.length).sort((a, b) => b.score - a.score).slice(0, 5).map(x => toIdea(x.r, { uses: x.uses, missing: x.missing,
+      why: `Uses your ${x.usedKeys.slice(0, 4).join(', ')}.${x.missing.length ? ` You'd need ${x.missing.length} more thing${x.missing.length === 1 ? '' : 's'}.` : ' You have everything!'}` }));
+  }
+  // ideas: skip anything made lately, favor what you loved, mix up the proteins
+  const scored = pool.filter(r => !recent.has(r.title.toLowerCase())).map(r => ({ r, s: Math.random() + (loved.has(r.title.toLowerCase()) ? .8 : 0) + (r.builtIn ? 0 : .3) + (r.tags && r.tags.includes('quick') ? .15 : 0) })).sort((a, b) => b.s - a.s);
+  const out = [], mains = new Set();
+  for (const { r } of scored) { const m = mainOf(r); if (mains.has(m) && out.length < 4) continue; mains.add(m); out.push(r); if (out.length === 5) break; }
+  return out.map(r => toIdea(r, { why: loved.has(r.title.toLowerCase()) ? 'A family favorite.' : r.builtIn ? (r.tags.includes('baby') ? 'Easy to set aside a soft portion for Margo.' : r.tags.includes('sheetpan') ? 'One pan, easy cleanup.' : r.tags.includes('slow') ? 'Set it in the morning, done by dinner.' : 'A weeknight winner.') : 'From your recipe box.' }));
+}
+
+// ----- smart paste: turn any recipe text into a title, ingredients, and steps -----
+function parseRecipeText(text) {
+  const raw = String(text || '').replace(/\r/g, '').replace(/(\d)\s*Ibs?\b/g, (m, d) => d + ' lb').replace(/\bIbs?\b/g, 'lb').split('\n').map(l => l.trim()).filter(Boolean);
+  const out = { title: '', ingredients: [], steps: [], minutes: '', servings: '', notes: '' };
+  if (!raw.length) return out;
+  const qty = /^(?:[-*•▢□☐]\s*)?(?:\d+[\d\s./½¼¾⅓⅔⅛-]*|a |an |one |two |three |pinch|dash|handful|½|¼|¾|⅓|⅔)\s*/i;
+  const unit = /\b(cups?|c\.|tbsp|tablespoons?|tsp|teaspoons?|lbs?|pounds?|oz|ounces?|grams?|g|kg|ml|cloves?|cans?|pinch|dash|sticks?|slices?|bunch|heads?|large|medium|small|packages?|jars?|stalks?|sprigs?)\b/i;
+  const H_ING = /^(ingredients?|you'?ll need|what you need|shopping list)\b:?/i, H_STEP = /^(instructions?|directions?|method|steps?|preparation|how to make( it)?)\b:?/i, H_NOTE = /^(notes?|tips?)\b:?/i;
+  let mode = null;
+  for (let i = 0; i < raw.length; i++) {
+    const l = raw[i];
+    const mt = l.match(/(?:total|cook|prep)?\s*time:?\s*(\d+)\s*(?:min|minutes)/i) || l.match(/\b(\d+)\s*(?:min|minutes)\b/i), ms = l.match(/\b(?:serves|servings?|yield|makes)\b:?\s*(\d+)/i);
+    if (mt && !out.minutes && l.length < 40) out.minutes = mt[1];
+    if (ms && !out.servings && l.length < 40) { out.servings = ms[1]; continue; }
+    if (H_ING.test(l)) { mode = 'ing'; continue; }
+    if (H_STEP.test(l)) { mode = 'step'; continue; }
+    if (H_NOTE.test(l)) { mode = 'note'; continue; }
+    if (!out.title && !mode && i < 3 && l.length < 70 && !qty.test(l)) { out.title = l.replace(/^#+\s*/, ''); continue; }
+    const clean = l.replace(/^(?:[-*•▢□☐]|\d+[.)](?=\s)|step\s*\d+:?)\s*/i, '').trim();
+    if (!clean) continue;
+    if (mode === 'ing') out.ingredients.push(clean);
+    else if (mode === 'step') { if (out.steps.length && clean.length < 25 && !/[.!]$/.test(out.steps[out.steps.length - 1])) out.steps[out.steps.length - 1] += ' ' + clean; else out.steps.push(clean); }
+    else if (mode === 'note') out.notes += (out.notes ? ' ' : '') + clean;
+    else if ((qty.test(l) && (unit.test(l) || l.length < 45)) || /^[-*•]/.test(l)) out.ingredients.push(clean);
+    else if (/^\d+[.)]\s/.test(l) || clean.length > 45) out.steps.push(clean);
+    else if (!out.title) out.title = clean;
+    else out.ingredients.push(clean);
+  }
+  out.notes = out.notes.slice(0, 300);
+  return out;
+}
+const toEditForm = p => ({ title: p.title, ingredients: p.ingredients.join('\n'), steps: p.steps.join('\n'), minutes: p.minutes, servings: p.servings, notes: p.notes });
+
+// ----- reading a screenshot right on the phone (free, no AI): Tesseract text recognition -----
+let ocrLib = null;
+const loadOCR = () => ocrLib ??= new Promise((res, rej) => { if (window.Tesseract) return res(window.Tesseract); const s = document.createElement('script'); s.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js'; s.onload = () => window.Tesseract ? res(window.Tesseract) : rej(new Error('ocr')); s.onerror = () => { ocrLib = null; rej(new Error('ocr')); }; document.head.appendChild(s); });
+async function importRecipeShot(file) {
+  recipeEdit = { title: '', ingredients: '', steps: '', reading: true, progress: 0 }; mealsTab = 'recipes'; renderApp(); $('appMain').scrollTop = 0;
+  try {
+    const T = await loadOCR(), pic = await resizeToBlob(file, 2000);
+    const r = await T.recognize(pic.blob, 'eng', { logger: m => { if (m.status === 'recognizing text' && recipeEdit && recipeEdit.reading) { const p = Math.round(m.progress * 100); if (p - (recipeEdit.progress || 0) >= 10) { recipeEdit.progress = p; const el = document.getElementById('ocrProg'); if (el) el.textContent = `${p}%`; } } } });
+    const text = (r && r.data && r.data.text || '').trim();
+    if (text.length < 20) throw Object.assign(new Error('empty'), { code: 'empty' });
+    const p = parseRecipeText(text);
+    recipeEdit = { ...toEditForm(p), imported: true, msg: p.ingredients.length && p.steps.length ? 'Read from your screenshot. Give it a quick check, since phone text-reading can misread a word or two.' : 'I read the text, but couldn\'t tell ingredients from steps for sure. Move lines between the boxes as needed.' };
+  } catch (e) {
+    recipeEdit = { title: '', ingredients: '', steps: '', msg: e && e.code === 'empty' ? "I couldn't find recipe text in that picture. Try a clearer, closer screenshot, or paste the recipe below." : "Screenshot reading couldn't start here. Tip: open the screenshot in Photos, press and hold the text, tap Select All, then Copy, and paste it below." };
+  }
+  renderApp();
 }
 
 // ---------- A pick-one menu (riddles, seeds, yard sales) ----------
@@ -6283,18 +6457,21 @@ function onAppClick(e) {
     case 'ideagroc': { const it = chef.ideas[+d.i]; if (it) { const n = addToGroceries((it.missing && it.missing.length ? it.missing : it.ingredients) || []); appToast(n ? `${n} added to groceries` : 'Already on the list'); renderApp(); } break; }
     case 'pickday': { if (pickDayFor) { planOnDay(pickDayFor.title, pickDayFor.ingredients, +d.day); appToast(`${pickDayFor.title} is on the plan`); pickDayFor = null; mealsTab = 'plan'; renderApp(); } break; }
     case 'pickcancel': pickDayFor = null; renderApp(); break;
+    case 'ideaopen': chef.open = chef.open === +d.i ? null : +d.i; renderApp(); break;
+    case 'cbfilter': cbFilter = d.k; recipeOpen = null; renderApp(); break;
+    case 'cbsave': { const r = anyRecipe(d.id); if (r) { if (recipes().some(x => x.title.toLowerCase() === r.title.toLowerCase())) { appToast('Already in your recipes'); break; } const nr = saveRecipe({ title: r.title, ingredients: r.ingredients, steps: r.steps, minutes: r.minutes }); recipeOpen = nr.id; appToast(`Saved ${r.title} to your recipes`); renderApp(); } break; }
     case 'recnew': recipeEdit = { title: '', ingredients: '', steps: '' }; renderApp(); break;
     case 'recipecancel': recipeEdit = null; renderApp(); break;
     case 'recopen': recipeOpen = recipeOpen === d.id ? null : d.id; renderApp(); break;
-    case 'recplan': { const r = recipes().find(x => x.id === d.id); if (r) { pickDayFor = { title: r.title, ingredients: r.ingredients }; renderApp(); $('appMain').scrollTop = 0; } break; }
-    case 'recgroc': { const r = recipes().find(x => x.id === d.id); if (r) { const n = addToGroceries(r.ingredients); appToast(n ? `${n} added to groceries` : 'Already on the list'); } break; }
-    case 'recmade': { const r = recipes().find(x => x.id === d.id); if (r) { madeSheet = { dish: r.title, recipeId: r.id }; mealsTab = 'made'; renderApp(); $('appMain').scrollTop = 0; } break; }
+    case 'recplan': { const r = anyRecipe(d.id); if (r) { pickDayFor = { title: r.title, ingredients: r.ingredients }; renderApp(); $('appMain').scrollTop = 0; } break; }
+    case 'recgroc': { const r = anyRecipe(d.id); if (r) { const n = addToGroceries(r.ingredients); appToast(n ? `${n} added to groceries` : 'Already on the list'); } break; }
+    case 'recmade': { const r = anyRecipe(d.id); if (r) { madeSheet = { dish: r.title, recipeId: r.id }; mealsTab = 'made'; renderApp(); $('appMain').scrollTop = 0; } break; }
     case 'recedit': { const r = recipes().find(x => x.id === d.id); if (r) { recipeEdit = { ...r, ingredients: r.ingredients.join('\n'), steps: r.steps.join('\n') }; renderApp(); $('appMain').scrollTop = 0; } break; }
     case 'recdel': { const r = recipes().find(x => x.id === d.id); if (r) { noteRemoved('recipes', r); mem.recipes = recipes().filter(x => x.id !== d.id); save('recipes'); appToast('Recipe deleted', () => { mem.recipes = [...recipes(), r]; save('recipes'); }); renderApp(); } break; }
     case 'madenew': madeSheet = {}; renderApp(); break;
     case 'madecancel': madeSheet = null; renderApp(); break;
     case 'madedel': { const e2 = dinnerLog().find(x => x.id === d.id); if (e2) { noteRemoved('dinnerlog', e2); mem.dinnerlog = dinnerLog().filter(x => x.id !== d.id); save('dinnerlog'); } renderApp(); break; }
-    case 'favplan': { const r = recipes().find(x => x.title.toLowerCase() === d.d.toLowerCase()); pickDayFor = { title: d.d, ingredients: r ? r.ingredients : [] }; renderApp(); $('appMain').scrollTop = 0; break; }
+    case 'favplan': { const r = chefPool().find(x => x.title.toLowerCase() === d.d.toLowerCase()); pickDayFor = { title: d.d, ingredients: r ? r.ingredients : [] }; renderApp(); $('appMain').scrollTop = 0; break; }
     case 'plannedmade': { const pd = mealPlan().days[+d.i]; if (pd) { const r = recipes().find(x => x.title.toLowerCase() === pd.dish.toLowerCase()); madeSheet = { dish: pd.dish, recipeId: r ? r.id : null, date: dateKey(weekDay(+d.i)) }; mealsTab = 'made'; renderApp(); $('appMain').scrollTop = 0; } break; }
     case 'ciopen': ciOpen = !ciOpen; renderApp(); break;
     case 'quick': quickMode = d.m; renderApp(); break;
@@ -6393,6 +6570,7 @@ function onAppSubmit(e) {
       appToast(`${nm} added to the library`); break;
     }
     case 'pantry': { const have = v('have'); if (!have) { appToast('List a few things you have first'); return; } runChef('pantry', have); return; }
+    case 'recipepaste': { const t = v('paste'); if (!t) { appToast('Paste a recipe first'); return; } const p2 = parseRecipeText(t); recipeEdit = { ...toEditForm(p2), imported: true, msg: p2.ingredients.length && p2.steps.length ? 'Sorted! Give it a quick look, then save.' : "I couldn't tell every line apart. Move lines between the boxes as needed." }; break; }
     case 'recipe': {
       if (!v('title')) { appToast('Give the recipe a name'); return; }
       const old = v('id') ? recipes().find(x => x.id === v('id')) : null;
