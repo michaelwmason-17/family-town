@@ -114,6 +114,48 @@
       return data && data.code;
     },
     email: () => CTX && CTX.email,
+    // ----- phone notifications -----
+    async pushState() {
+      const ios = /iPhone|iPad|iPod/.test(navigator.userAgent), standalone = navigator.standalone === true || matchMedia('(display-mode: standalone)').matches;
+      if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) return { state: ios && !standalone ? 'install' : 'unsupported', prefs: {} };
+      if (Notification.permission === 'denied') return { state: 'denied', prefs: {} };
+      const reg = await navigator.serviceWorker.getRegistration('/');
+      const sub = reg && await reg.pushManager.getSubscription();
+      if (!sub || !CTX) return { state: 'off', prefs: {} };
+      const { data } = await CTX.sb.from('push_subs').select('prefs').eq('endpoint', sub.endpoint).maybeSingle();
+      return data ? { state: 'on', prefs: data.prefs || {} } : { state: 'off', prefs: {} };
+    },
+    async pushEnable(slot) {
+      const perm = await Notification.requestPermission();   // must be the first thing after the tap
+      if (perm !== 'granted') return perm === 'denied' ? 'denied' : 'off';
+      const reg = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
+      await navigator.serviceWorker.ready;
+      let sub = await reg.pushManager.getSubscription();
+      if (!sub) {
+        const b = atob(CFG.vapidPublicKey.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat((4 - CFG.vapidPublicKey.length % 4) % 4));
+        sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: Uint8Array.from(b, c => c.charCodeAt(0)) });
+      }
+      const { error } = await CTX.sb.from('push_subs').upsert({ endpoint: sub.endpoint, user_id: CTX.me, family_id: CTX.fam, slot, sub: sub.toJSON(), prefs: {} }, { onConflict: 'endpoint' });
+      if (error) throw new Error(error.message);
+      return 'on';
+    },
+    async pushDisable() {
+      const reg = await navigator.serviceWorker.getRegistration('/'), sub = reg && await reg.pushManager.getSubscription();
+      if (!sub) return;
+      await CTX.sb.from('push_subs').delete().eq('endpoint', sub.endpoint);
+      await sub.unsubscribe();
+    },
+    async pushPrefs(prefs) {
+      const reg = await navigator.serviceWorker.getRegistration('/'), sub = reg && await reg.pushManager.getSubscription();
+      if (sub) await CTX.sb.from('push_subs').update({ prefs }).eq('endpoint', sub.endpoint);
+    },
+    async notify(payload) {
+      if (!CTX) return;
+      const { data } = await CTX.sb.auth.getSession(), tok = data && data.session && data.session.access_token;
+      if (!tok) return;
+      const r = await fetch('/api/push', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + tok }, body: JSON.stringify(payload) });
+      return r.ok ? r.json() : Promise.reject(new Error((await r.json().catch(() => ({}))).error || 'Could not send.'));
+    },
     async signOut() { if (CTX) await CTX.sb.auth.signOut(); try { for (const k of Object.keys(localStorage)) if (k.startsWith('ft_')) localStorage.removeItem(k); } catch (e) {} location.reload(); },
   };
 

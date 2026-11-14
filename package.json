@@ -1,0 +1,8 @@
+{
+  "name": "family-town",
+  "private": true,
+  "description": "Family Town: the website's small server functions (notifications, calendar, Bible text).",
+  "dependencies": {
+    "web-push": "3.6.7"
+  }
+}

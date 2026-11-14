@@ -162,6 +162,13 @@
   .chip .pts { color:var(--a-kelp); font-weight:800; }
   .chip.soft { background:var(--a-bay-soft); border-color:transparent; color:var(--a-bay); }
   .chip.done { background:var(--a-kelp-soft); border-color:transparent; color:var(--a-kelp); }
+  .quest-row { display:flex; align-items:center; gap:10px; padding:8px 0; border-top:1px solid var(--a-line); }
+  .quest-row:first-of-type { border-top:none; }
+  .quest-row .qbox { width:22px; height:22px; border-radius:7px; border:2px solid var(--a-line); display:grid; place-items:center; font-weight:900; color:#fff; flex:0 0 22px; }
+  .quest-row.done .qbox { background:var(--a-kelp); border-color:var(--a-kelp); }
+  .quest-row.done > span:nth-child(2) { color:var(--a-soft); text-decoration:line-through; }
+  .care-line { display:flex; justify-content:space-between; align-items:center; gap:10px; padding:5px 0; }
+  .care-l { font-weight:800; }
   .chip.on { background:var(--a-bay); border-color:var(--a-bay); color:#fff; }
   .in { font:inherit; font-size:16px; color:var(--a-ink); background:var(--a-card); border:1px solid var(--a-line); border-radius:12px; padding:10px 12px; width:100%; min-width:0; }
   .in:focus { outline:2px solid var(--a-bay); outline-offset:1px; }
@@ -497,7 +504,7 @@ async function flushKey(k) {
 }
 // Lists where both of you add items (chat, calendar, chores) merge item by item instead of
 // last-write-wins, so two things added at the same moment both survive.
-const MERGE_KEYS = { photolog: p => p.id, bcomments: c => c.id, notes: n => n.id, events: e => e.id, chorelog: e => `${e.at}|${e.id}|${e.by}`, bigGoals: g => g.id, goals: g => g.id };
+const MERGE_KEYS = { photolog: p => p.id, bcomments: c => c.id, notes: n => n.id, events: e => e.id, chorelog: e => `${e.at}|${e.id}|${e.by}`, bigGoals: g => g.id, goals: g => g.id, prayers: p => p.id };
 const tomb = {};                // item keys deleted on this phone, so a merge doesn't bring them back
 const recent = {};              // item keys this phone added in the last minute
 function noteAdded(k, item) { (recent[k] = recent[k] || new Map()).set(MERGE_KEYS[k](item), Date.now()); }
@@ -676,13 +683,13 @@ set(10, 62, 'c');   // the Big Sur campfire
 
 const BUILDINGS = [
   { id: 'home',    name: 'HOME',        x: 13, y: 3,  w: 6, h: 4, roof: '#d04848', sign: 'HOME: Step inside to do chores. The fridge has your dashboard.' },
-  { id: 'chapel',  name: 'CHAPEL',      x: 4,  y: 4,  w: 5, h: 4, roof: '#c8a070', adobe: true, sign: 'ROYAL PRESIDIO CHAPEL: Read the Bible together. Standing since 1794.' },
+  { id: 'chapel',  name: 'CHAPEL',      x: 4,  y: 4,  w: 5, h: 4, roof: '#c8a070', adobe: true, sign: 'ROYAL PRESIDIO CHAPEL: Light a prayer candle, ring the bell, and read together. Standing since 1794.' },
   { id: 'clock',   name: 'CLOCK TOWER', x: 24, y: 2,  w: 4, h: 6, roof: '#8858b8', sign: 'CLOCK TOWER: The family calendar.' },
   { id: 'gallery', name: 'GALLERY',     x: 4,  y: 17, w: 6, h: 5, roof: '#d89030', sign: 'GALLERY: Your favorite family photos.' },
-  { id: 'market',  name: 'MARKET',      x: 22, y: 17, w: 6, h: 5, roof: '#48a058', sign: 'OLD MONTEREY MARKET: Your grocery list. Market day is Tuesday!' },
+  { id: 'market',  name: 'MARKET',      x: 22, y: 17, w: 6, h: 5, roof: '#48a058', sign: 'OLD MONTEREY MARKET: Sell your harvest, buy each other gifts, and check the grocery list.' },
   { id: 'aquarium', name: 'AQUARIUM',   x: 36, y: 31, w: 7, h: 4, roof: '#2f8f9f', coast: true, sign: 'AQUARIUM: Otters, jellies, and a giant kelp forest. Come in!' },
-  { id: 'wharf',   name: 'CHOWDER SHACK', x: 50, y: 9, w: 4, h: 3, roof: '#d06030', coast: true, sign: 'CHOWDER SHACK: Plan family outings. Free chowder samples!' },
-  { id: 'galley',  name: 'THE GALLEY',  x: 31, y: 4,  w: 5, h: 4, roof: '#3a7a5a', sign: "THE GALLEY: Plan the week's dinners. Calamari is always on." },
+  { id: 'wharf',   name: 'CHOWDER SHACK', x: 50, y: 9, w: 4, h: 3, roof: '#d06030', coast: true, sign: 'CHOWDER SHACK: Free chowder samples and the outing idea jar!' },
+  { id: 'galley',  name: 'THE GALLEY',  x: 31, y: 4,  w: 5, h: 4, roof: '#3a7a5a', sign: "THE GALLEY: Chef Marco has dinner ideas. Calamari is always on." },
   { id: 'rec',     name: 'REC CENTER',  x: 39, y: 14, w: 4, h: 3, roof: '#e0a030', coast: true, sign: 'REC CENTER: Tennis, pickleball, ping pong, and bowling. Alone or together!' },
   { id: 'shop',    name: 'SHELL SHOP',  x: 37, y: 4,  w: 5, h: 4, roof: '#d0679a', sign: 'SHELL SHOP: Shirts, hats, and dance moves. Pay with the shells you win in games!' },
   { id: 'custom',  name: 'CUSTOM HOUSE', x: 33, y: 13, w: 6, h: 3, roof: '#b85838', adobe: true, sign: "CUSTOM HOUSE: California's oldest government building. And your family's story." },
@@ -757,7 +764,7 @@ for (let y = 42; y < MH - 1; y++) for (let x = 2; x < 44; x++) {
 }
 for (let y = 0; y < MH; y++) for (let x = 0; x < MW; x++) if (map[y][x] === 'G' && hash(x, y) % 10 === 0) map[y][x] = 'F';
 
-const SOLID = new Set(['T', 'W', 'B', 'S', 'Q', 'M', 'K', 'O', 'X', 'Y', 'E', 'V', 'Z', 'H', 'J', 'U', 'N', 'c']);
+const SOLID = new Set(['j', 'T', 'W', 'B', 'S', 'Q', 'M', 'K', 'O', 'X', 'Y', 'E', 'V', 'Z', 'H', 'J', 'U', 'N', 'c']);
 
 // ---------- Pixel art (drawn in code for now; swap in an art pack later) ----------
 const world = document.createElement('canvas');
@@ -996,7 +1003,7 @@ DECOR.forEach(d => d.kind === 'cannery' ? drawCannery(d) : drawLighthouse(d));
 drawCypress(12 * 16, 38 * 16 + 6);
 
 // ---------- Seasons ----------
-const NOW = new Date(), MONTH = NOW.getMonth();
+const NOW = new Date(), MONTH = (() => { try { const q = +new URLSearchParams(location.search).get('month'); if (q >= 1 && q <= 12) return q - 1; } catch (e) {} return NOW.getMonth(); })();
 const HALLOWEEN = MONTH === 9 && NOW.getDate() === 31, CHRISTMAS = MONTH === 11 && NOW.getDate() === 25;
 const SNOWY = MONTH === 11 || MONTH === 0;
 // October: jack-o'-lanterns next to every sign and at the plaza corners
@@ -1262,7 +1269,7 @@ function crowning() {
 }
 
 function updateHud() {
-  const low = scene === 'house' && mode !== 'mini';
+  const low = scene !== 'town' && mode !== 'mini';
   $('hud').classList.toggle('low', low);
   if (low) { $('hud').innerHTML = `${esc(nameOf(active))} · ${shells(active)} SHELLS`; return; }
   if (mode === 'mini') { $('hud').innerHTML = mini.hud(); return; }
@@ -1272,6 +1279,7 @@ function updateHud() {
 
 function tryMove(c, d) {
   if (scene === 'house') { houseMove(c, d); return; }
+  if (scene.startsWith('in:')) { insideMove(c, d); return; }
   c.dir = d;
   const nx = c.x + DV[d][0], ny = c.y + DV[d][1], t = map[ny]?.[nx];
   if (t === 'D') {
@@ -1293,7 +1301,7 @@ function tryMove(c, d) {
 }
 
 function warp(x, y, dir) {
-  if (scene !== 'town') { scene = 'town'; updateHud(); }
+  if (scene !== 'town') { scene = 'town'; insideId = null; updateHud(); }
   const c = chars[active], o = chars[1 - active];
   if (o.x === x && o.y === y) Object.assign(o, { x: x + 1, fx: x + 1, y, fy: y, t: 1, moving: false });
   Object.assign(c, { x, fx: x, y, fy: y, t: 1, moving: false, dir });
@@ -1303,7 +1311,7 @@ function warp(x, y, dir) {
 function swap() {
   if (mode !== 'walk') return;
   if (knowsMe()) { say([`You're playing as ${nameOf(active)}. ${nameOf(1 - active)} plays on their own phone.`]); return; }
-  if (scene === 'house') { say(['Step outside to swap players.']); return; }
+  if (scene !== 'town') { say(['Step outside to swap players.']); return; }
   active = 1 - active;
   updateHud();
 }
@@ -1341,6 +1349,7 @@ function enterBuilding(b) {
   if (b.id === 'rec') { sfx.play('door'); recMenu(); return; }
   if (b.id === 'shop') { sfx.play('door'); say(['Welcome to the SHELL SHOP!', `You have ${shells(active)} shells. Shirts, hats, Margo outfits, and dance moves inside!`], () => showApp('us', 'wardrobe')); return; }
   if (CARMEL_ENTER[b.id]) { sfx.play('door'); CARMEL_ENTER[b.id](b); return; }
+  if (INSIDE[b.id]) { enterInside(b); return; }
   if (BUILDING_APP[b.id]) { sfx.play('door'); showApp(...BUILDING_APP[b.id]); return; }
   openPanel(b.id);
 }
@@ -1348,6 +1357,7 @@ function interact() {
   const c = chars[active];
   if (c.moving) return;
   if (scene === 'house') { houseInteract(c); return; }
+  if (scene.startsWith('in:')) { insideInteract(c); return; }
   const x = c.x + DV[c.dir][0], y = c.y + DV[c.dir][1], o = chars[1 - active];
   const pet = petAt(x, y);
   if (pet) { petInteract(pet); return; }
@@ -1378,6 +1388,7 @@ function interact() {
   else if (t === 'D') enterBuilding(BUILDINGS.find(b => b.door.x === x && b.door.y === y));
   else if (t === 'T') say(['A big, leafy tree.']);
   else if (t === 'K') say(["A grinning jack-o'-lantern. Spooky season in Family Town!"]);
+  else if (t === 'j') centerpieceTalk();
 }
 
 // ---------- Dialog ----------
@@ -1399,12 +1410,12 @@ function advanceDialog() {
 $('dialog').addEventListener('click', () => { if (mode === 'dialog') advanceDialog(); });
 
 // ---------- START menu (fast travel) ----------
-const MAIN_MENU = [['MISSIONS', 'missions'], ['PLAY', '@play'], ['SAY HI', '@social'], ['SHOP & CLOSET', 'wardrobe'], ['TRAVEL', '@travel'], ['MORE', '@more'], ['CLOSE', 'close']];
+const MAIN_MENU = [['QUESTS', 'dq'], ['MISSIONS', 'missions'], ['PLAY', '@play'], ['SAY HI', '@social'], ['SHOP & CLOSET', 'wardrobe'], ['TRAVEL', '@travel'], ['MORE', '@more'], ['CLOSE', 'close']];
 const SUB_MENUS = {
   '@play': [['GULL GLIDE', 'arc:gull'], ['MOOSE RUN', 'arc:run'], ['BASKETBALL', 'hoops'], ['SOCCER', 'pk'], ['REC CENTER', 'go:rec'], ['MIDNIGHT SNACK', 'arcade'], ['FISHING', 'fish'], ['LULLABY', 'lullaby'], ['DOG WALK', 'dogwalk'], ['HIGH SCORES', 'hiscores'], ['BACK', '@main']],
   '@social': [['EMOTE', '@emote'], ['DANCE', '@dance'], ['MESSAGES', 'chat'], ['BACK', '@main']],
   '@more': [['SCOREBOARD', 'scores'], ['CHALLENGES', 'daily'], ['SOUND & MUSIC', '@options'], ['SWAP PLAYER', 'swap'], ['BACK TO APP', 'app'], ['BACK', '@main']],
-  '@travel': [['HOME', 'home'], ['SHELL SHOP', 'go:shop'], ['CHAPEL', 'chapel'], ['MARKET', 'market'], ['REC CENTER', 'go:rec'], ['CARMEL', 'go:carmel'], ['BIG SUR', 'go:bigsur'], ['BACK', '@main']],
+  '@travel': [['HOME', 'home'], ['SHELL SHOP', 'go:shop'], ['CHAPEL', 'chapel'], ['MARKET', 'market'], ['THE GALLEY', 'galley'], ['CHOWDER SHACK', 'wharf'], ['REC CENTER', 'go:rec'], ['CARMEL', 'go:carmel'], ['BIG SUR', 'go:bigsur'], ['BACK', '@main']],
   '@options': [['SOUND FX', 'fx'], ['MUSIC', 'music'], ['BACK', '@more']],
   '@main': MAIN_MENU,
 };
@@ -1428,6 +1439,7 @@ function chooseMenu(i) {
   if (id.startsWith('dance:')) { startAct('dance', id.slice(6)); return; }
   if (id === 'dshop') { showApp('us', 'wardrobe'); return; }
   if (id === 'missions') { missionsMenu(); return; }
+  if (id === 'dq') { say(questsSay()); return; }
   if (id === 'arc:gull') { say(['GULL GLIDE: Tap A to flap between the pier posts.', 'Grab sea shells for bonus points. It gets faster!'], () => startMini(gullGlide())); return; }
   if (id === 'arc:run') { say(['MOOSE RUN: Moose is loose on the rec trail!', 'A to jump (tap twice to double jump), DOWN to duck under gulls.'], () => startMini(mooseRun())); return; }
   if (id === 'hiscores') { say(hiScoresText()); return; }
@@ -1519,12 +1531,13 @@ function resizeImage(file, max = 720) {
   });
 }
 // ----- Meal plan (The Galley) and family milestones (Custom House) -----
+const calWeekKey = () => { const d = new Date(); d.setDate(d.getDate() - (d.getDay() + 6) % 7); return dateKey(d); };
 function mealPlan() {
-  const m = load('meals', { week: weekKey(), days: {} });
-  if (m.week !== weekKey()) { m.week = weekKey(); m.days = {}; save('meals'); }
+  const m = load('meals', { week: calWeekKey(), days: {} });
+  if (m.week !== calWeekKey()) { m.week = calWeekKey(); m.days = {}; save('meals'); }
   return m;
 }
-const weekDay = i => { const d = new Date(weekKey() + 'T00:00'); d.setDate(d.getDate() + i); return d; };
+const weekDay = i => { const d = new Date(calWeekKey() + 'T00:00'); d.setDate(d.getDate() + i); return d; };
 const todayIdx = () => (new Date().getDay() + 6) % 7;
 function addToGroceries(names) {
   const items = load('groceries', DEFAULT_GROCERIES);
@@ -1800,7 +1813,7 @@ const PANELS = {
   } },
 };
 
-const EARN_LIFE = [['HOUSE CHORES', '+2 TO +10 EACH'], ['FINISH A TO-DO', '+15'], ['GO ON A FAMILY OUTING', '+15'], ['REACH A WEEKLY GOAL', '+15'], ['REACH A MONTHLY GOAL', '+30'], ['FINISH A BOOK OF THE BIBLE', '+25'], ['DAILY LIFE CHALLENGE', '+10'],
+const EARN_LIFE = [['TODAY\'S 4 QUESTS', '+5 EACH, +10 FOR ALL'], ['HOUSE CHORES', '+2 TO +10 EACH'], ['FINISH A TO-DO', '+15'], ['GO ON A FAMILY OUTING', '+15'], ['REACH A WEEKLY GOAL', '+15'], ['REACH A MONTHLY GOAL', '+30'], ['FINISH A BOOK OF THE BIBLE', '+25'], ['DAILY LIFE CHALLENGE', '+10'],
   ['READ A BIBLE CHAPTER', '+5 (3 A DAY)'], ['DAILY CHECK-IN', '+3 A DAY'], ['COMMENT ON A CHAPTER', '+2 (3 A DAY)'], ['ADD A CALENDAR EVENT', '+5 (3 A DAY)'], ['ADD TO GROCERY LIST', '+3 (10 A DAY)'], ['ADD A PHOTO', '+3 (3 A DAY)'],
   ['ADD A FAMILY MILESTONE', '+5 (2 A DAY)'], ['PLAN A DINNER', '+3 (3 A DAY)'],
   ['CHECK OFF A GROCERY', '+2 (10 A DAY)'], ['ADD A TO-DO', '+2 (5 A DAY)'], ['ADD AN OUTING IDEA', '+2 (3 A DAY)']];
@@ -2017,9 +2030,10 @@ function weekStats(i, week) {
   return w.week === week ? w : w.prev && w.prev.week === week ? w.prev : { best: {}, days: [] };
 }
 function recordScore(game, n) {
+  track(['tennis', 'pickle', 'pong', 'bowl'].includes(game) ? 'play_rec' : 'play_' + game);
   const w = myWeek(), old = w.best[game] || 0;
   if (n <= old) return false;
-  w.best[game] = n; save('wk' + active); return true;
+  w.best[game] = n; save('wk' + active); track('newbest'); return true;
 }
 function markDay() { const w = myWeek(), d = dateKey(new Date()); if (!w.days.includes(d)) { w.days.push(d); save('wk' + active); } }
 function hiBonus(week) {
@@ -2225,10 +2239,11 @@ function track(ev) {
     if (prog[id] >= c.n) { if (c.life) addPoints(active, pts); else addShells(active, pts); notes.push(`DAILY CHALLENGE DONE: ${c.text}!`, `+${pts} ${c.life ? 'PTS' : 'SHELLS'} for ${nameOf(active)}!`); }
   }
   save('daily');
+  trackQuest(ev);
 }
 // Points from minigames are capped per player per day so nobody can just grind.
 // Town activities pay out in shells (the game's own currency); real-life actions pay points.
-const SHELL_GAMES = new Set(['gull', 'run', 'danceparty', 'bake', 'quiet', 'tea', 'dogbeach', 'smores', 'arcade', 'fish', 'lullaby', 'walk', 'otter', 'journal', 'garden', 'hoops', 'pk', 'coop', 'tennis', 'pickle', 'pong', 'bowl', 'housework']);
+const SHELL_GAMES = new Set(['chapel', 'bell', 'cook', 'chowder', 'market', 'hunt', 'gull', 'run', 'danceparty', 'bake', 'quiet', 'tea', 'dogbeach', 'smores', 'arcade', 'fish', 'lullaby', 'walk', 'otter', 'journal', 'garden', 'hoops', 'pk', 'coop', 'tennis', 'pickle', 'pong', 'bowl', 'housework']);
 function capAward(game, cap, n) {
   const today = dateKey(new Date()), d = load('cap_' + game, { date: today, pts: [0, 0] });
   if (d.date !== today) { d.date = today; d.pts = [0, 0]; }
@@ -2238,6 +2253,200 @@ function capAward(game, cap, n) {
   return earned;
 }
 const capMsg = cap => `You already hit today's max (${cap}). Bragging rights only!`;
+
+// ---------- Today's quests: 4 personal quests each day (different for each of you), real points ----------
+const DQ_PTS = 5, DQ_BONUS = 10;
+const DQ_POOL = [
+  // around town
+  { id: 'pray', ev: 'pray', n: 1, kind: 'town', text: 'Pray at the chapel altar' },
+  { id: 'bell', ev: 'bell', n: 1, kind: 'town', text: 'Ring the chapel bell' },
+  { id: 'candle', ev: 'prayer', n: 1, kind: 'town', text: 'Light or pray over a prayer candle' },
+  { id: 'gift', ev: 'gift', n: 1, kind: 'town', text: 'Buy {them} a gift at the market' },
+  { id: 'cook', ev: 'cook', n: 1, kind: 'town', text: 'Cook at the Galley stove' },
+  { id: 'chowder', ev: 'visit_wharf', n: 1, kind: 'town', text: 'Visit the chowder shack' },
+  { id: 'water', ev: 'water', n: 1, kind: 'town', text: 'Water the family garden' },
+  { id: 'pets', ev: 'pet', n: 3, kind: 'town', text: 'Pet Moose, Maisy, and SK' },
+  { id: 'locals', ev: 'locals', n: 2, kind: 'town', text: 'Chat with 2 locals' },
+  { id: 'happen', ev: 'happening', n: 1, kind: 'town', text: "Check out one of today's happenings" },
+  { id: 'lost', ev: 'sock', n: 1, kind: 'town', text: 'Find something in the lost & found' },
+  { id: 'hunt', ev: 'hunt', n: 2, kind: 'town', text: 'Find 2 seasonal treasures in town' },
+  { id: 'dogwalk', ev: 'dogwalk', n: 1, kind: 'town', text: 'Take the dogs on a walk' },
+  { id: 'pass', ev: 'pass', n: 2, kind: 'town', text: 'Pass Margo to {them} twice' },
+  { id: 'otter', ev: 'otter', n: 1, kind: 'town', text: 'Spot a sea otter in the bay' },
+  // games
+  { id: 'gull', ev: 'play_gull', n: 1, kind: 'game', text: 'Play a round of Gull Glide' },
+  { id: 'run', ev: 'play_run', n: 1, kind: 'game', text: 'Play a round of Moose Run' },
+  { id: 'fish', ev: 'play_fish', n: 1, kind: 'game', text: 'Go fishing at the fountain' },
+  { id: 'hoops', ev: 'play_hoops', n: 1, kind: 'game', text: 'Shoot hoops at the court' },
+  { id: 'arcade', ev: 'play_arcade', n: 1, kind: 'game', text: 'Play Midnight Snack at the arcade' },
+  { id: 'rec', ev: 'play_rec', n: 1, kind: 'game', text: 'Play anything at the rec center' },
+  { id: 'hi', ev: 'newbest', n: 1, kind: 'game', text: 'Beat your best score in any game this week' },
+  // real life
+  { id: 'care', ev: 'care', n: 2, kind: 'life', text: 'Log 2 things in Margo & pets care' },
+  { id: 'chores2', ev: 'chore', n: 2, kind: 'life', text: 'Do 2 real chores' },
+  { id: 'note', ev: 'note', n: 1, kind: 'life', text: 'Send {them} a sweet message' },
+  { id: 'photo', ev: 'dphoto', n: 1, kind: 'life', text: 'Take a daily photo' },
+  { id: 'checkin', ev: 'checkin', n: 1, kind: 'life', text: 'Do your daily check-in' },
+  { id: 'meal', ev: 'meal', n: 1, kind: 'life', text: 'Plan a dinner' },
+];
+function myQuests() {
+  const k = 'dq' + active, today = dateKey(new Date()), q = load(k, null);
+  if (q && q.date === today && q.picks.every(id => DQ_POOL.some(p => p.id === id))) return q;
+  const r = seeded('dq' + today + active), take = kind => { const list = DQ_POOL.filter(p => p.kind === kind && !picks.includes(p.id)); picks.push(list[Math.floor(r() * list.length)].id); };
+  const picks = [];
+  take('town'); take('town'); take('game'); take('life');
+  mem[k] = { date: today, picks, prog: {}, done: [], bonus: false }; save(k);
+  return mem[k];
+}
+const dqText = p => p.text.replace('{them}', titleCase(nameOf(1 - active)));
+function trackQuest(ev) {
+  if (!names) return;
+  const q = myQuests(); let changed = false;
+  for (const id of q.picks) {
+    const p = DQ_POOL.find(x => x.id === id);
+    if (!p || p.ev !== ev || q.done.includes(id)) continue;
+    q.prog[id] = (q.prog[id] || 0) + 1; changed = true;
+    if (q.prog[id] >= p.n) {
+      q.done.push(id); addPoints(active, DQ_PTS);
+      const msg = [`QUEST DONE: ${dqText(p)}!`, `+${DQ_PTS} PTS for ${nameOf(active)}.`];
+      if (q.done.length === q.picks.length && !q.bonus) { q.bonus = true; addPoints(active, DQ_BONUS); msg.push(`ALL 4 QUESTS DONE! +${DQ_BONUS} BONUS PTS!`); }
+      if (appOpen) appToast(`Quest done: ${dqText(p)} · +${DQ_PTS}${q.bonus && q.done.length === q.picks.length ? ` (+${DQ_BONUS} bonus!)` : ''}`); else notes.push(...msg);
+    }
+  }
+  if (changed) save('dq' + active);
+}
+function questsSay() {
+  const q = myQuests();
+  return [`TODAY'S QUESTS (+${DQ_PTS} PTS EACH, +${DQ_BONUS} FOR ALL 4):`, ...q.picks.map(id => { const p = DQ_POOL.find(x => x.id === id); return `${q.done.includes(id) ? 'DONE: ' : ''}${dqText(p)}${p.n > 1 && !q.done.includes(id) ? ` (${q.prog[id] || 0}/${p.n})` : ''}`; })];
+}
+function questsCard() {
+  const q = myQuests(), n = q.done.length;
+  return `<section class="card"><div class="card-h"><span class="eyebrow">Your quests today &middot; ${n} of 4</span><span class="muted2">+${DQ_PTS} each, +${DQ_BONUS} for all</span></div>
+    ${q.picks.map(id => { const p = DQ_POOL.find(x => x.id === id), done = q.done.includes(id);
+      return `<div class="quest-row ${done ? 'done' : ''}"><span class="qbox">${done ? '&#10003;' : ''}</span><span style="flex:1">${esc(dqText(p))}</span>${p.n > 1 && !done ? `<span class="muted2">${q.prog[id] || 0}/${p.n}</span>` : ''}<span class="muted2">${p.kind === 'life' ? 'Real life' : p.kind === 'game' ? 'Game' : 'Town'}</span></div>`; }).join('')}
+    ${n < 4 ? '<button class="town-btn" data-act="town" style="width:100%; margin-top:10px">Go to Family Town</button>' : '<p class="muted2" style="margin:8px 0 0">All done! New quests tomorrow.</p>'}</section>`;
+}
+
+// ---------- The seasons: decorations, a daily treasure hunt, and holiday surprises ----------
+const SEASONS = [
+  { name: 'Mitten hunt', item: 'MITTEN', col: '#d04848', col2: '#f8f8f8' },          // January
+  { name: 'Love note hunt', item: 'LOVE NOTE', col: '#f070a8', col2: '#f8f8f8' },     // February
+  { name: 'Shamrock hunt', item: 'SHAMROCK', col: '#48a058', col2: '#2a7a38' },       // March
+  { name: 'Egg hunt', item: 'SPRING EGG', col: '#a0d8f8', col2: '#f8a0c0' },          // April
+  { name: 'Wildflower hunt', item: 'WILDFLOWER', col: '#f8d030', col2: '#f08020' },   // May
+  { name: 'Sand dollar hunt', item: 'SAND DOLLAR', col: '#f0e0c0', col2: '#c8b090' }, // June
+  { name: 'Firecracker hunt', item: 'STAR', col: '#e04848', col2: '#3870c8' },        // July
+  { name: 'Sea glass hunt', item: 'SEA GLASS', col: '#68c8a0', col2: '#a0e8d0' },     // August
+  { name: 'Apple hunt', item: 'APPLE', col: '#d04848', col2: '#48a058' },             // September
+  { name: 'Candy hunt', item: 'CANDY CORN', col: '#f8d030', col2: '#f08020' },        // October
+  { name: 'Acorn hunt', item: 'ACORN', col: '#a06830', col2: '#6a4020' },             // November
+  { name: 'Ornament hunt', item: 'ORNAMENT', col: '#d04848', col2: '#f0c030' },       // December
+];
+const SEASON = SEASONS[MONTH];
+const HUNT_N = 4;
+function todaysHunt() {
+  const today = dateKey(new Date()), s = load('hunt', null);
+  if (s && s.date === today && s.month === MONTH) return s;
+  const r = seeded('hunt' + today), items = [];
+  let guard = 0;
+  while (items.length < HUNT_N && guard++ < 500) {
+    const x = 2 + Math.floor(r() * 44), y = 2 + Math.floor(r() * 36);
+    if (['G', 'F', 'A', 'P'].includes(map[y][x]) && !DOOR_FRONT.has(`${x},${y}`) && !items.some(p => Math.abs(p.x - x) + Math.abs(p.y - y) < 6)) items.push({ x, y });
+  }
+  mem.hunt = { date: today, month: MONTH, items, found: {} }; save('hunt');
+  return mem.hunt;
+}
+function huntPickup(c) {
+  const s = todaysHunt(), i = s.items.findIndex((p, i) => p.x === c.x && p.y === c.y && s.found[i] == null);
+  if (i < 0) return false;
+  s.found[i] = active; save('hunt'); sfx.play('catch');
+  const got = capAward('hunt', 8, 2), left = s.items.filter((_, j) => s.found[j] == null).length;
+  track('hunt');
+  const lines = [`You found a ${SEASON.item}! ${got ? `+${got} shells.` : ''}`, left ? `${left} more hidden around town today.` : `That's all ${HUNT_N} for today!`];
+  if (!left) { const pts = 5; addPoints(active, pts); lines.push(`Treasure hunter! +${pts} PTS.`); }
+  say(lines);
+  return true;
+}
+function drawHuntItem(sx, sy, t) {
+  const b = Math.round(Math.sin(t * 3 + sx) * 1.5), c1 = SEASON.col, c2 = SEASON.col2, y = sy + 5 + b, x = sx + 4;
+  px(ctx, x, y + 6, 8, 2, 'rgba(0,0,0,.18)');
+  switch (SEASON.item) {
+    case 'ORNAMENT': px(ctx, x + 1, y, 6, 6, '#202020'); px(ctx, x + 2, y + 1, 4, 4, c1); px(ctx, x + 3, y - 1, 2, 1, c2); px(ctx, x + 2, y + 1, 1, 1, '#ffffff'); break;
+    case 'LOVE NOTE': px(ctx, x, y, 8, 6, '#202020'); px(ctx, x + 1, y + 1, 6, 4, '#f8f8f0'); px(ctx, x + 3, y + 2, 2, 2, c1); break;
+    case 'SPRING EGG': px(ctx, x + 2, y - 1, 4, 1, '#202020'); px(ctx, x + 1, y, 6, 6, '#202020'); px(ctx, x + 2, y, 4, 5, c1); px(ctx, x + 2, y + 2, 4, 1, c2); break;
+    case 'STAR': px(ctx, x + 3, y - 1, 2, 8, c1); px(ctx, x, y + 2, 8, 2, c1); px(ctx, x + 2, y + 1, 4, 4, c2); break;
+    default: px(ctx, x + 1, y, 6, 6, '#202020'); px(ctx, x + 2, y + 1, 4, 4, c1); px(ctx, x + 2, y + 1, 2, 2, c2);
+  }
+  if (Math.floor(t * 2 + sx) % 4 === 0) { px(ctx, x + 7, y - 2, 1, 3, '#ffffff'); px(ctx, x + 6, y - 1, 3, 1, '#ffffff'); }
+}
+// Decorations that change with the month: string lights and wreaths in December, hearts in February,
+// bunting in July, hay bales and a scarecrow in November.
+function drawSeason(camX, camY, light) {
+  const t = performance.now() / 1000, on = (sx, sy) => sx > -40 && sx < SW + 40 && sy > -40 && sy < SH + 40;
+  const s = todaysHunt();
+  s.items.forEach((p, i) => { if (s.found[i] == null) { const sx = p.x * 16 - camX, sy = p.y * 16 - camY; if (on(sx, sy)) drawHuntItem(sx, sy, t); } });
+  for (const b of BUILDINGS) {
+    const sx = b.x * 16 - camX, sy = b.y * 16 - camY;
+    if (!on(sx, sy)) continue;
+    if (MONTH === 11) {   // Christmas lights and a wreath on every door
+      for (let i = 2; i < b.w * 16 - 2; i += 5) { const k = (i / 5 + Math.floor(t * 2)) % 4; px(ctx, sx + i, sy + 3 + (i % 10 ? 1 : 0), 2, 2, ['#e04848', '#48c048', '#f8d030', '#58a8f8'][k]); }
+      const dx = b.door.x * 16 - camX, dy = b.door.y * 16 - camY;
+      px(ctx, dx + 4, dy - 1, 8, 8, '#2a7a38'); px(ctx, dx + 6, dy + 1, 4, 4, b.adobe ? '#e8d8b8' : '#8a6a4a'); px(ctx, dx + 7, dy + 5, 2, 2, '#d04848');
+    } else if (MONTH === 1) {   // hearts for Valentine's month
+      px(ctx, sx + b.w * 8 - 3, sy - 2, 2, 2, '#f070a8'); px(ctx, sx + b.w * 8 + 1, sy - 2, 2, 2, '#f070a8'); px(ctx, sx + b.w * 8 - 3, sy, 6, 2, '#f070a8'); px(ctx, sx + b.w * 8 - 1, sy + 2, 2, 1, '#f070a8');
+    } else if (MONTH === 6) {   // red, white, and blue bunting
+      for (let i = 0; i < b.w * 16 - 4; i += 6) { const c = ['#e04848', '#f8f8f8', '#3870c8'][(i / 6) % 3]; px(ctx, sx + 2 + i, sy + 4, 5, 2, c); px(ctx, sx + 3 + i, sy + 6, 3, 2, c); }
+    } else if (MONTH === 3 || MONTH === 4) {   // spring flower boxes
+      for (let i = 4; i < b.w * 16 - 4; i += 8) { px(ctx, sx + i, sy + b.h * 16 - 8, 6, 3, '#7a5030'); px(ctx, sx + i + 1, sy + b.h * 16 - 10, 2, 2, ['#f070a8', '#f8d030', '#a0d8f8'][(i / 8) % 3]); px(ctx, sx + i + 3, sy + b.h * 16 - 11, 2, 2, '#f8f8f8'); }
+    }
+  }
+  const T = SEASON_SPOT, tx = T.x * 16 - camX, ty = T.y * 16 - camY;
+  if (on(tx, ty)) drawCenterpiece(tx, ty, t, light);
+  if (MONTH === 10) {   // hay bales and a scarecrow by the garden
+    const [hx, hy] = [HAY_SPOT.x * 16 - camX, HAY_SPOT.y * 16 - camY];
+    if (on(hx, hy)) { px(ctx, hx + 1, hy + 7, 14, 8, '#202020'); px(ctx, hx + 2, hy + 8, 12, 6, '#e0c060'); px(ctx, hx + 2, hy + 10, 12, 1, '#c0a040');
+      px(ctx, hx + 18, hy - 6, 2, 20, '#7a5030'); px(ctx, hx + 13, hy, 12, 2, '#7a5030'); px(ctx, hx + 15, hy - 1, 8, 7, '#a85a30'); px(ctx, hx + 16, hy - 8, 6, 6, '#f0c060'); px(ctx, hx + 14, hy - 10, 10, 3, '#6a4a30'); }
+  }
+}
+// One centerpiece in the plaza that changes with the season.
+function drawCenterpiece(x, y, t, light) {
+  if (MONTH === 11 || MONTH === 0) {   // a Christmas tree (stays up into January as a snowy pine)
+    px(ctx, x + 6, y + 12, 4, 4, '#6a4020');
+    for (let r = 0; r < 4; r++) { const w = 4 + r * 3; px(ctx, x + 8 - w / 2 - 1, y - 14 + r * 6, w + 2, 7, '#1a4a28'); px(ctx, x + 8 - w / 2, y - 13 + r * 6, w, 6, '#2a7a38'); }
+    if (MONTH === 11) { for (let i = 0; i < 9; i++) { const k = (i + Math.floor(t * 2)) % 4; px(ctx, x + 3 + (i * 5) % 10, y - 10 + (i * 7) % 20, 2, 2, ['#e04848', '#f8d030', '#58a8f8', '#f8f8f8'][k]); }
+      px(ctx, x + 6, y - 19, 4, 4, '#f8d030'); px(ctx, x + 7, y - 20, 2, 6, '#f8e060');
+      if (new Date().getDate() <= 25) { px(ctx, x - 6, y + 10, 7, 6, '#d04848'); px(ctx, x - 3, y + 10, 1, 6, '#f8d030'); px(ctx, x + 15, y + 11, 6, 5, '#3870c8'); px(ctx, x + 17, y + 11, 1, 5, '#f8f8f8'); } }
+    else { px(ctx, x + 4, y - 12, 8, 2, '#f8f8f8'); px(ctx, x + 2, y - 4, 12, 2, '#f8f8f8'); }
+  } else if (MONTH === 9 || MONTH === 10) {   // a big pumpkin pile, then a cornucopia
+    px(ctx, x, y + 6, 16, 10, '#202020'); px(ctx, x + 1, y + 7, 7, 8, '#f08020'); px(ctx, x + 8, y + 7, 7, 8, '#e87818'); px(ctx, x + 4, y + 1, 8, 7, '#202020'); px(ctx, x + 5, y + 2, 6, 6, MONTH === 10 ? '#d04848' : '#f09030'); px(ctx, x + 7, y - 1, 2, 3, '#3a7030');
+  } else if (MONTH === 1) {   // a heart arch
+    px(ctx, x + 1, y - 6, 6, 6, '#f070a8'); px(ctx, x + 9, y - 6, 6, 6, '#f070a8'); px(ctx, x + 1, y - 2, 14, 6, '#f070a8'); px(ctx, x + 4, y + 4, 8, 3, '#f070a8'); px(ctx, x + 7, y + 7, 2, 2, '#f070a8'); px(ctx, x + 3, y - 4, 2, 2, '#ffffff'); px(ctx, x + 7, y + 9, 2, 7, '#a05070');
+  } else if (MONTH >= 5 && MONTH <= 7) {   // a beach umbrella
+    px(ctx, x + 7, y - 6, 2, 22, '#f8f8f8'); for (let i = 0; i < 5; i++) px(ctx, x - 2 + i * 4, y - 10 + Math.abs(2 - i), 4, 5, i % 2 ? '#f8f8f8' : (MONTH === 6 ? '#3870c8' : '#e04848'));
+  } else {   // a flower cart
+    px(ctx, x, y + 4, 16, 8, '#202020'); px(ctx, x + 1, y + 5, 14, 6, '#a87848'); for (let i = 0; i < 6; i++) px(ctx, x + 1 + i * 2 + (i % 2), y + 1 + (i % 2), 3, 3, ['#f070a8', '#f8d030', '#a0d8f8', '#f8f8f8'][i % 4]); px(ctx, x + 2, y + 12, 4, 4, '#303030'); px(ctx, x + 10, y + 12, 4, 4, '#303030');
+  }
+}
+function centerpieceTalk() {
+  const d = new Date().getDate();
+  if (MONTH === 11 && d <= 25) {
+    const k = 'advent' + active, got = load(k, '');
+    if (got === dateKey(new Date())) { say(['The tree twinkles. Come back tomorrow for another present!']); return; }
+    mem[k] = dateKey(new Date()); save(k);
+    const n = d === 25 ? 10 : 2; addShells(active, n); track('hunt');
+    say(d === 25 ? ['MERRY CHRISTMAS!', 'A big present under the tree has your name on it!', `+${n} SHELLS!`] : [`Advent day ${d}: a little present under the tree!`, `+${n} shells. One more tomorrow!`]);
+    return;
+  }
+  say([{ 0: 'A snowy pine left over from Christmas. Happy New Year!', 1: 'A heart arch for Valentine\'s month. Find the love notes hidden around town!', 9: 'A pile of pumpkins. Candy corn is hidden all over town!',
+    10: 'A cornucopia for Thanksgiving. What are you thankful for this year?', 5: 'Beach season! Sand dollars are hidden around town.', 6: 'Happy Fourth! Fireworks every night this first week of July.', 7: 'Late summer by the bay. Look for sea glass around town!' }[MONTH]
+    || `A flower cart. The ${SEASON.name.toLowerCase()} is on: ${HUNT_N} hidden around town every day!`]);
+}
+
+// The season's centerpiece sits on a patch of grass by the plaza; hay bales by the garden in November.
+function nearGrass(x0, y0) { for (let r = 0; r < 8; r++) for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) { const x = x0 + dx, y = y0 + dy; if (Math.max(Math.abs(dx), Math.abs(dy)) === r && map[y]?.[x] === 'G' && !DOOR_FRONT_RAW(x, y)) return { x, y }; } return { x: x0, y: y0 }; }
+function DOOR_FRONT_RAW(x, y) { return BUILDINGS.some(b => b.door.x === x && b.door.y + 1 === y); }
+const SEASON_SPOT = nearGrass(21, 12), HAY_SPOT = nearGrass(23, 7);
+set(SEASON_SPOT.x, SEASON_SPOT.y, 'j');
 
 // ---------- Lost & found: 3 different things go missing around town every day ----------
 const LOST_THINGS = [
@@ -2270,6 +2479,7 @@ function arrive(c) {
   if (scene !== 'town') return;
   if (dogWalk && walkCheckpoint(c)) return;
   if (errandPickup(c)) return;
+  if (huntPickup(c)) return;
   const s = todaysLost(), i = s.items.findIndex((p, i) => p.x === c.x && p.y === c.y && s.found[i] == null);
   if (i < 0) return;
   s.found[i] = active; save('lost');
@@ -2489,7 +2699,7 @@ const WALK_LINES = [
 let dogWalk = null;
 const trail = [];
 function startDogWalk() {
-  if (scene === 'house') { say(['Head outside first. Moose is already at the door.']); return; }
+  if (scene !== 'town') { say(['Head outside first. Moose is already at the door.']); return; }
   if (dogWalk) { say(["You're already on a walk! Follow the paw prints."]); return; }
   const pool = [...WALK_SPOTS], stops = [];
   while (stops.length < 3) stops.push(pool.splice(Math.floor(Math.random() * pool.length), 1)[0]);
@@ -3036,6 +3246,387 @@ function drawHouseState() {
     const sx = 8 * 16 + 4 + i * 4, sy = 7 * 16 + 4 - Math.round((t * 6 + i * 3) % 6);
     px(ctx, sx, sy, 1, 2, '#88c048'); px(ctx, sx + 1, sy - 2, 1, 2, '#88c048');
   }
+}
+
+
+// ---------- Inside the town's buildings: the chapel, the market, the Galley, and the chowder shack ----------
+// Each one is a little room you walk around in, like your house. # wall, . floor, m door mat (exit).
+let insideId = null;
+const INSIDE = {
+  chapel: { name: 'ROYAL PRESIDIO CHAPEL', wall: '#e8d8b8', trim: '#a87850', floor: 'tile', spawn: [5, 7], map: [
+    '##########',
+    '#c.aaaa.g#',
+    '#......f.#',
+    '#.l......#',
+    '#pp....pp#',
+    '#........#',
+    '#pp....pp#',
+    '#.......r#',
+    '#####m####'],
+    npcs: { f: { name: 'FATHER ANSEL', pal: { hair: '#c8c8d0', skin: SKIN[1], shirt: '#6a4a30', pants: '#6a4a30' } } } },
+  market: { name: 'OLD MONTEREY MARKET', wall: '#f0e6cc', trim: '#48a058', floor: 'check', spawn: [5, 7], map: [
+    '##########',
+    '#ffvvbbbb#',
+    '#........#',
+    '#.ss..ss.#',
+    '#........#',
+    '#.ss..ss.#',
+    '#........#',
+    '#l....kcc#',
+    '#####m####'],
+    npcs: { k: { name: 'ROSA', pal: { hair: '#2a1a10', skin: SKIN[2], shirt: '#e8a020', pants: '#5a4a3a', long: true } } } },
+  galley: { name: 'THE GALLEY', wall: '#e8e0d0', trim: '#3a7a5a', floor: 'wood', spawn: [5, 7], map: [
+    '##########',
+    '#ookkC.MM#',
+    '#........#',
+    '#.tt..tt.#',
+    '#.tt..tt.#',
+    '#........#',
+    '#.tt..tt.#',
+    '#........#',
+    '#####m####'],
+    npcs: { C: { name: 'CHEF MARCO', pal: { hair: '#202020', skin: SKIN[1], shirt: '#f8f8f8', pants: '#303030' } } } },
+  wharf: { name: 'CHOWDER SHACK', wall: '#c8d8e0', trim: '#d06030', floor: 'boards', spawn: [5, 7], map: [
+    '##########',
+    '#kkkCkk.I#',
+    '#........#',
+    '#.tt..tt.#',
+    '#........#',
+    '#.tt..tt.#',
+    '#........#',
+    '#w......j#',
+    '#####m####'],
+    npcs: { C: { name: 'SAL', pal: { hair: '#909098', skin: SKIN[1], shirt: '#e8d040', pants: '#3a4a6a' } } } },
+};
+const INSIDE_WALK = new Set(['.', 'm']);
+const inside = () => INSIDE[insideId];
+const insideAt = (x, y) => inside() && inside().map[y]?.[x];
+
+function enterInside(b) {
+  const c = chars[active], R = INSIDE[b.id];
+  townSpot = { x: c.x, y: c.y };
+  insideId = b.id; scene = 'in:' + b.id; heldDirs.length = 0;
+  Object.assign(c, { x: R.spawn[0], fx: R.spawn[0], y: R.spawn[1], fy: R.spawn[1], t: 1, moving: false, dir: 'up' });
+  sfx.play('door'); track('visit_' + b.id); updateHud();
+  if (!load('insideSeen', {})[b.id]) { const s = load('insideSeen', {}); s[b.id] = 1; mem.insideSeen = s; save('insideSeen'); say(INSIDE_HELLO[b.id]); }
+}
+const INSIDE_HELLO = {
+  chapel: ['The old adobe chapel is cool and quiet.', 'Light a prayer candle, read at the lectern, ring the bell, or sit in a pew.'],
+  market: ['The market smells like strawberries and fresh bread.', 'Sell your garden harvest, buy a gift for each other, or check the grocery list.'],
+  galley: ['Garlic, butter, and calamari. The Galley is busy tonight.', 'Ask Chef Marco for a dinner idea, cook at the stove, or check the menu board.'],
+  wharf: ['Sea lions bark right outside the window.', 'Grab a chowder sample, shake the idea jar, or check the outing board.'],
+};
+function leaveInside() {
+  const c = chars[active], b = BUILDINGS.find(x => x.id === insideId);
+  scene = 'town'; insideId = null; heldDirs.length = 0; trail.length = 0;
+  Object.assign(c, { x: b.door.x, fx: b.door.x, y: b.door.y + 1, fy: b.door.y + 1, t: 1, moving: false, dir: 'down' });
+  sfx.play('back'); updateHud();
+}
+function insideMove(c, d) {
+  c.dir = d;
+  const nx = c.x + DV[d][0], ny = c.y + DV[d][1], t = insideAt(nx, ny);
+  if (t === 'm') { leaveInside(); return; }
+  if (!t || !INSIDE_WALK.has(t)) return;
+  const o = chars[1 - active];
+  if (partnerLive() && live.peer.scene === scene && o.x === nx && o.y === ny) return;
+  c.fx = c.x; c.fy = c.y; c.x = nx; c.y = ny; c.t = 0; c.moving = true; c.step ^= 1;
+}
+function insideInteract(c) {
+  const x = c.x + DV[c.dir][0], y = c.y + DV[c.dir][1], t = insideAt(x, y);
+  if (!t || t === '.') return;
+  if (t === 'm') { leaveInside(); return; }
+  const fn = (INSIDE_ACT[insideId] || {})[t];
+  if (fn) { sfx.play('select'); fn(x, y); }
+}
+
+// ----- what you can do in each room -----
+const CHAPEL_PEW = ['You sit in the quiet for a moment. The candles flicker.', 'Sunlight comes through the old windows. Breathe in. Breathe out.', 'You sit and think about what you are thankful for today.', 'The adobe walls are thick and cool. It is very peaceful here.'];
+const DINNER_IDEAS = [
+  ['Fish tacos', 'Tortillas, cod, cabbage, limes, crema'], ['Chicken pesto pasta', 'Pasta, chicken, pesto, parmesan, cherry tomatoes'], ['Sheet-pan salmon and veggies', 'Salmon, broccoli, potatoes, lemon'],
+  ['Turkey chili', 'Ground turkey, beans, diced tomatoes, onion, chili powder'], ['Breakfast for dinner', 'Eggs, bacon, pancake mix, berries'], ['Burrito bowls', 'Rice, black beans, chicken, salsa, avocado, cheese'],
+  ['Clam chowder and sourdough', 'Clams, potatoes, cream, onion, sourdough bread'], ['Homemade pizza', 'Pizza dough, sauce, mozzarella, pepperoni, basil'], ['Teriyaki chicken stir-fry', 'Chicken, teriyaki sauce, rice, snap peas, carrots'],
+  ['Artichokes and steak', 'Steak, artichokes, butter, lemon'], ['Chicken noodle soup', 'Chicken, egg noodles, carrots, celery, broth'], ['Shrimp scampi', 'Shrimp, linguine, garlic, butter, lemon'],
+  ['Slow cooker pot roast', 'Chuck roast, potatoes, carrots, onion, broth'], ['Caesar salad with chicken', 'Romaine, chicken, parmesan, croutons, Caesar dressing'], ['Grilled cheese and tomato soup', 'Bread, cheddar, tomato soup'],
+  ['Baked ziti', 'Ziti, marinara, ricotta, mozzarella, Italian sausage'], ['Calamari night', 'Calamari, flour, lemon, marinara, salad greens'], ['Enchiladas', 'Tortillas, enchilada sauce, chicken, cheese, onion'],
+];
+const OUTING_IDEAS = ['Tide pools at Asilomar', 'Sunset at Lovers Point', 'Stroller walk on the rec trail', 'Coffee and a walk on Cannery Row', 'Picnic at Carmel Beach', 'Monarch grove in Pacific Grove',
+  'Drive 17-Mile Drive', 'Dog beach morning at Carmel', 'Farmers market on Alvarado', 'Point Lobos hike', 'Kayak in the harbor', 'Ice cream on the wharf', 'Dennis the Menace Park', 'Garland Ranch picnic'];
+const GIFTS = [['FLOWERS', 8, '💐', 'bought you flowers at the market!'], ['CHOCOLATE', 6, '🍫', 'bought you chocolate at the market!'], ['A COFFEE', 4, '☕', 'is bringing you a coffee!'], ['A TREAT FOR THE DOGS', 3, '🦴', 'got Moose and Maisy a treat!']];
+function chapelGratitude() {
+  const out = [];
+  for (let d = 0; d < 14 && out.length < 4; d++) { const k = dateKey(addDays(-d)); for (const i of [0, 1]) { const c = checkins(i)[k]; if (c && c.thankful && out.length < 4) out.push(`${nameOf(i)} was thankful for ${c.thankful}`.slice(0, 90)); } }
+  return out;
+}
+function sellHarvest() {
+  const g = gardenState(), have = Object.entries(g.harvested).filter(([, n]) => n > 0);
+  if (!have.length) { say(['ROSA: "Grow something in the family garden and I will buy it! 3 shells each."', 'The garden is by the plaza. Plant, water once a day, then harvest.']); return; }
+  choose([...have.map(([id, n]) => [`SELL ${CROPS[id].name} (${n}) +${n * 3}`, () => {
+    g.harvested[id] = 0; mem.garden = g; save('garden'); addShells(active, n * 3); track('sell');
+    say([`ROSA: "Beautiful ${CROPS[id].name.toLowerCase()}!"`, `+${n * 3} SHELLS for ${nameOf(active)}.`]);
+  }]), ['NEVER MIND', () => {}]]);
+}
+function buyGift() {
+  choose([...GIFTS.map(([name, cost, emoji, text]) => [`${name} (${cost} SHELLS)`, () => {
+    if (shells(active) < cost) { say([`You need ${cost} shells. You have ${shells(active)}.`, 'Play games around town to earn more!']); return; }
+    addShells(active, -cost); addShells(1 - active, 2); track('gift');
+    postChat({ text: `${emoji} ${titleCase(nameOf(active))} ${text}` });
+    say([`You bought ${name.toLowerCase()} for ${nameOf(1 - active)}.`, `They'll see it in chat, and they get +2 shells too.`]);
+  }]), ['NEVER MIND', () => {}]]);
+}
+function planDinnerIdea(idea) {
+  idea = idea || pick(DINNER_IDEAS);
+  const ti = todayIdx(), dayName = i => i === ti ? 'TONIGHT' : weekDay(i).toLocaleDateString('en-US', { weekday: 'long' }).toUpperCase();
+  say([`CHEF MARCO: "How about ${idea[0].toLowerCase()}?"`, `You'd need: ${idea[1].toLowerCase()}.`], () => choose([
+    ['PUT IT ON THE PLAN', () => choose([...Array.from({ length: 7 }, (_, i) => i).filter(i => i >= ti).map(i => [`${dayName(i)}${mealPlan().days[i] ? ' (REPLACE)' : ''}`, () => {
+      const m = mealPlan(), isNew = !m.days[i]; m.days[i] = { dish: idea[0], ingredients: idea[1] }; save('meals');
+      const got = isNew ? capAward('meal', 9, 3) : 0; track('meal');
+      say([`${idea[0]} is on the menu for ${dayName(i).toLowerCase()}!`, got ? `+${got} PTS. The ingredients are one tap away in Lists > Dinners.` : 'Find it in Lists > Dinners.']);
+    }]), ['NEVER MIND', () => {}]])],
+    ['ANOTHER IDEA', () => planDinnerIdea()],
+    ['NO THANKS', () => {}]]));
+}
+const INSIDE_ACT = {
+  chapel: {
+    a: () => { const e = pickEncouragement(), got = capAward('chapel', 4, 2); track('pray');
+      say(['You kneel at the altar and pray together for a moment.', e[0], `(${e[1]})`, got ? `+${got} shells. Peace be with you.` : 'Peace be with you.']); },
+    c: () => openPanel('prayers'),
+    g: () => { const g = chapelGratitude(); say(['THE GRATITUDE WALL. Your check-in "thankful for" notes are pinned here.', ...(g.length ? g : ['Nothing pinned yet. Add what you are thankful for in your daily check-in!'])]); },
+    l: () => choose([['READ THE BIBLE TOGETHER', () => showApp('bible')], ['A VERSE FOR TODAY', () => { const e = ENCOURAGEMENTS[Math.floor(seeded('verse' + dateKey(new Date()))() * ENCOURAGEMENTS.length)]; say([e[0], `(${e[1]})`]); }], ['NEVER MIND', () => {}]]),
+    f: () => { const e = ENCOURAGEMENTS[Math.floor(seeded('padre' + dateKey(new Date()))() * ENCOURAGEMENTS.length)];
+      say([`FATHER ANSEL: "Welcome, ${titleCase(nameOf(active))}. A word for your family today:"`, e[0], `(${e[1]})`, 'He smiles. "Light a candle if you have a prayer request. I will pray too."']); },
+    p: () => { track('pew'); say([pick(CHAPEL_PEW)]); },
+    r: (x, y) => startMini(timingGame({ title: 'RING THE BELL', verb: 'PULL!', game: 'bell', cap: 5, at: { x, y }, tone: 196, done: n => n ? `DONG! The bell rings out over Monterey ${n} time${n === 1 ? '' : 's'}.` : 'The bell just wobbles. Try again!' })),
+  },
+  market: {
+    f: sellHarvest,
+    v: () => choose([...STAPLES.slice(0, 6).map(s => [`ADD ${s.toUpperCase()} TO THE LIST`, () => { const n = addToGroceries([s]); say([n ? `${s} is on the grocery list.` : `${s} is already on the list.`]); }]), ['NEVER MIND', () => {}]]),
+    b: buyGift,
+    s: () => say([pick(['Artichokes from Castroville. Strawberries from Watsonville.', 'Local honey, olive oil, and saltwater taffy.', 'A whole shelf of sourdough. Bliss.', 'Fresh flowers from the Salinas Valley.'])]),
+    l: () => showApp('lists', 'groceries'),
+    k: () => { const left = listItems('groceries').filter(it => !it.done).length, got = capAward('market', 2, 2);
+      say([`ROSA: "Hi, ${titleCase(nameOf(active))}! Your family list has ${left} thing${left === 1 ? '' : 's'} on it."`, got ? `"Here's a little something for stopping by." +${got} shells.` : '"Come back tomorrow for another market treat!"']); },
+    c: () => INSIDE_ACT.market.k(),
+  },
+  galley: {
+    C: () => planDinnerIdea(),
+    o: (x, y) => startMini(timingGame({ title: 'FLIP THE CALAMARI', verb: 'FLIP!', game: 'cook', cap: 5, at: { x, y }, tone: 330, done: n => n >= 4 ? 'Golden and crispy. Chef Marco is impressed!' : n ? 'A little uneven, but delicious.' : 'Oops. That one is a little crispy.' })),
+    k: () => say([pick(['A recipe card: "Calamari, flour, salt, lemon. Fry hot and fast."', 'Fresh herbs in little pots: basil, rosemary, thyme.', 'A tip jar labeled "For Margo\'s college fund." Cute.'])]),
+    M: () => { const m = mealPlan(), ti = todayIdx(), d = m.days[ti], n = Object.keys(m.days).length;
+      say([`THE MENU BOARD: ${n} of 7 dinners planned this week.`, d ? `Tonight: ${d.dish}.` : 'Nothing planned for tonight yet.'], () => showApp('lists', 'dinners')); },
+    t: () => say([pick(['A cozy table by the window. Perfect for a date night.', 'Someone left a crayon drawing of a sea otter. Adorable.', 'The candle on the table smells like vanilla.'])]),
+  },
+  wharf: {
+    C: () => { const got = capAward('chowder', 2, 2); say([`SAL: "Clam chowder in a sourdough bowl. Best on the wharf!"`, got ? `Free sample! +${got} shells.` : '"One sample a day, friend. Come back tomorrow!"']); },
+    k: () => INSIDE_ACT.wharf.C(),
+    I: () => showApp('lists', 'ideas'),
+    j: () => { const have = new Set(listItems('outings').map(it => it.t.toLowerCase())), fresh = OUTING_IDEAS.filter(t => !have.has(t.toLowerCase())), idea = pick(fresh.length ? fresh : OUTING_IDEAS);
+      say(['You shake the idea jar. A slip of paper falls out...', `"${idea}"`], () => choose([['ADD IT TO OUR IDEAS', () => { if (!have.has(idea.toLowerCase())) addListItem('outings', idea); say([`Added "${idea}" to your outing ideas.`]); }], ['SHAKE AGAIN', () => INSIDE_ACT.wharf.j()], ['NO THANKS', () => {}]])); },
+    w: () => say(['ARF! ARF! ARF! The sea lions are LOUD today.', 'A sea otter floats by on its back, cracking a clam.']),
+    t: () => say([pick(['Little oyster crackers everywhere. Margo would love it.', 'The table wobbles. Classic wharf charm.'])]),
+  },
+};
+
+// A timing mini-game: a marker swings back and forth; tap A when it's in the green.
+function timingGame(o) {
+  const g = { tries: 5, hits: 0, x: 0, v: 1.6, flash: 0, done: 0, zone: [.4, .6] };
+  const finish = () => { endMini(); const got = g.hits ? capAward(o.game, o.cap, g.hits) : 0; track(o.game);
+    say([o.done(g.hits), got ? `+${got} SHELLS!` : g.hits ? capMsg(o.cap) : 'Give it another go!']); };
+  return {
+    hud: () => `${o.title}<br>${g.hits} OF 5 · ${g.tries} LEFT`,
+    update(dt) {
+      g.x += g.v * dt; if (g.x > 1) { g.x = 1; g.v = -g.v; } if (g.x < 0) { g.x = 0; g.v = -g.v; }
+      if (g.flash) g.flash = Math.max(0, g.flash - dt);
+      if (g.done && (g.done -= dt) <= 0) finish();
+    },
+    a() {
+      if (g.done || !g.tries) return;
+      g.tries--; const hit = g.x >= g.zone[0] && g.x <= g.zone[1];
+      if (hit) { g.hits++; g.flash = .4; if (sfx.prefs().fx) sfx.tone(o.tone, .35, 'triangle', .08); const w = Math.max(.08, (g.zone[1] - g.zone[0]) * .8), c = .25 + Math.random() * .5; g.zone = [c - w / 2, c + w / 2]; g.v *= 1.15; }
+      else sfx.play('back');
+      if (!g.tries) g.done = .8;
+    },
+    quit() { endMini(); say(['Maybe later.']); },
+    render() {
+      renderInside();
+      if (g.flash) { px(ctx, o.at.x * 16 - 4, o.at.y * 16 - 8, 24, 3, '#f8e060'); px(ctx, o.at.x * 16 - 2, o.at.y * 16 - 12, 20, 2, '#f8e060'); }
+      px(ctx, 8, 96, 144, 44, '#202020'); px(ctx, 10, 98, 140, 40, '#f8f8f0');
+      ctx.font = '8px "Press Start 2P", monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.fillStyle = '#202020';
+      ctx.fillText(g.done ? `${g.hits} OF 5!` : o.verb, 80, 102);
+      px(ctx, 20, 114, 120, 8, '#202020'); px(ctx, 22, 116, 116, 4, '#d8d0c0');
+      px(ctx, 22 + Math.round(116 * g.zone[0]), 116, Math.max(2, Math.round(116 * (g.zone[1] - g.zone[0]))), 4, '#48a058');
+      px(ctx, 22 + Math.round(114 * g.x), 112, 2, 12, '#d04848');
+      ctx.fillStyle = '#808088'; ctx.fillText('TAP A IN THE GREEN', 80, 126);
+    },
+  };
+}
+
+// ----- drawing the rooms (once each), then people on top every frame -----
+const insideCanvases = {};
+function insideCanvas(id) {
+  if (insideCanvases[id]) return insideCanvases[id];
+  const R = INSIDE[id], cv = document.createElement('canvas'); cv.width = 160; cv.height = 144;
+  const h = cv.getContext('2d'), P = (x, y, wd, ht, col) => { h.fillStyle = col; h.fillRect(x, y, wd, ht); };
+  const floor = (X, Y, x, y) => {
+    if (R.floor === 'tile') { P(X, Y, 16, 16, '#c87850'); P(X, Y, 16, 1, '#a85a38'); P(X, Y, 1, 16, '#a85a38'); if ((x + y) % 2) P(X + 4, Y + 4, 8, 8, '#d08860'); }
+    else if (R.floor === 'check') { P(X, Y, 16, 16, (x + y) % 2 ? '#f0ece0' : '#c8d8c0'); }
+    else if (R.floor === 'boards') { P(X, Y, 16, 16, '#9aa8b0'); for (let i = 0; i < 16; i += 4) P(X, Y + i, 16, 1, '#7a8890'); P(X + (x * 5 + y * 3) % 14, Y + 1, 1, 3, '#7a8890'); }
+    else { P(X, Y, 16, 16, '#b88858'); for (let i = (y % 2) * 2; i < 16; i += 4) P(X, Y + i, 16, 1, '#a07040'); }
+  };
+  for (const pass of [0, 1]) R.map.forEach((row, y) => [...row].forEach((t, x) => {
+    const X = x * 16, Y = y * 16;
+    if (t === '#') {
+      if (pass) return;
+      if (y === 0) { P(X, Y, 16, 16, R.wall); P(X, Y + 13, 16, 3, R.trim); return; }
+      P(X, Y, 16, 16, '#5a4030'); P(X + (x === 0 ? 13 : 0), Y, 3, 16, R.trim); return;
+    }
+    if (pass === 0) {
+      floor(X, Y, x, y);
+      if (t === 'm') { P(X, Y, 16, 16, '#5a4030'); P(X + 2, Y, 12, 6, '#7a8a5a'); P(X + 3, Y + 1, 10, 4, '#98a878'); }
+      if (id === 'chapel' && t === '.' && x >= 3 && x <= 6 && y >= 2) { P(X + 2, Y, 12, 16, '#a83838'); P(X + 2, Y, 1, 16, '#c8a050'); P(X + 13, Y, 1, 16, '#c8a050'); }   // the aisle runner
+      return;
+    }
+    // furniture and stations
+    if (t === 'a') { P(X, Y - 4, 16, 20, '#303030'); P(X + (x === 3 ? 1 : 0), Y - 3, x === 6 ? 15 : 16, 18, '#f8f8f0'); P(X, Y + 10, 16, 5, '#c8a050'); if (x === 4) { P(X + 12, Y - 14, 8, 2, '#c8a050'); P(X + 15, Y - 18, 2, 12, '#c8a050'); } }
+    if (t === 'c' && id === 'chapel') { P(X + 2, Y + 6, 12, 10, '#303030'); P(X + 3, Y + 7, 10, 8, '#7a5030'); for (let i = 0; i < 3; i++) { P(X + 4 + i * 3, Y + 2, 2, 5, '#f8f8f0'); } }
+    if (t === 'g') { P(X + 1, Y - 6, 14, 16, '#303030'); P(X + 2, Y - 5, 12, 14, '#c89058'); P(X + 3, Y - 4, 4, 4, '#f8f070'); P(X + 8, Y - 3, 4, 4, '#f8a0c0'); P(X + 4, Y + 2, 4, 4, '#a0d8f8'); P(X + 9, Y + 3, 3, 3, '#f8f8f0'); }
+    if (t === 'l') { P(X + 4, Y + 6, 8, 10, '#303030'); P(X + 5, Y + 7, 6, 9, '#7a5030'); P(X + 2, Y + 2, 12, 6, '#303030'); P(X + 3, Y + 3, 10, 4, '#f8f8f0'); P(X + 8, Y + 3, 1, 4, '#c84848'); }
+    if (t === 'p') { P(X, Y + 4, 16, 10, '#303030'); P(X + (x % 2 ? 1 : 0), Y + 5, 15, 4, '#8a5a30'); P(X + (x % 2 ? 1 : 0), Y + 9, 15, 4, '#7a4a28'); }
+    if (t === 'r') { P(X + 7, Y - 16, 2, 28, '#c8a070'); P(X + 6, Y + 10, 4, 4, '#a87850'); }
+    if (t === 'f' || t === 'k' && id === 'market' || t === 'C') { /* people are drawn every frame */ }
+    if (t === 'v' || t === 'f' && id === 'market') { const fr = t === 'v' ? ['#58a040', '#f08020', '#88d860'] : ['#e03848', '#f8d030', '#e86040'];
+      P(X, Y - 2, 16, 18, '#303030'); P(X + 1, Y - 1, 14, 16, '#a87848'); for (let i = 0; i < 6; i++) P(X + 2 + (i % 3) * 4, Y + 1 + Math.floor(i / 3) * 4, 3, 3, fr[(i + x) % 3]); }
+    if (t === 'b') { P(X, Y - 2, 16, 18, '#303030'); P(X + 1, Y - 1, 14, 16, '#e8d8c0'); P(X + 2, Y + 1, 5, 4, ['#f070a8', '#f8d030', '#c86030', '#e03848'][x % 4]); P(X + 9, Y + 2, 5, 3, '#a85a30'); P(X + 3, Y + 8, 10, 4, x % 2 ? '#8a5030' : '#f8f8f0'); }
+    if (t === 's') { P(X, Y - 4, 16, 18, '#303030'); P(X + 1, Y - 3, 14, 16, '#c8a878'); for (let r = 0; r < 3; r++) { P(X + 1, Y + r * 5, 14, 1, '#8a6a4a'); for (let i = 0; i < 3; i++) P(X + 2 + i * 5, Y - 3 + r * 5, 3, 4, ['#d04848', '#3870c8', '#f0c030', '#48a058'][(x + y + r + i) % 4]); } }
+    if (t === 'l' && id === 'market') { /* same lectern-ish board */ }
+    if (t === 'c' && id === 'market') { P(X, Y + 2, 16, 14, '#303030'); P(X, Y + 3, 16, 12, '#48a058'); P(X, Y + 3, 16, 3, '#68c078'); if (x === 8) P(X + 4, Y - 2, 8, 5, '#606068'); }
+    if (t === 'o') { P(X, Y - 2, 16, 18, '#303030'); P(X + 1, Y - 1, 14, 5, '#404048'); P(X + 2, Y, 4, 2, '#e86030'); P(X + 10, Y, 4, 2, '#e86030'); P(X + 1, Y + 5, 14, 10, '#c0c0c8'); P(X + 3, Y + 7, 10, 6, '#303038'); }
+    if (t === 'k' && id !== 'market') { P(X, Y - 2, 16, 18, '#303030'); P(X, Y - 1, 16, 16, id === 'wharf' ? '#a85a30' : '#8a6a4a'); P(X, Y - 1, 16, 3, id === 'wharf' ? '#d08050' : '#e8e8e8');
+      if (id === 'wharf' && x % 2) { P(X + 4, Y - 6, 8, 6, '#303030'); P(X + 5, Y - 5, 6, 4, '#d8b070'); P(X + 6, Y - 5, 4, 2, '#f8f0d8'); } }
+    if (t === 'M') { P(X, Y - 14, 16, 20, '#303030'); P(X + (x === 7 ? 1 : 0), Y - 13, 15, 18, '#2a3a30'); for (let i = 0; i < 4; i++) P(X + 3, Y - 10 + i * 4, x === 7 ? 12 : 9, 1, '#f8f8f0'); }
+    if (t === 'I') { P(X + 1, Y - 12, 14, 18, '#303030'); P(X + 2, Y - 11, 12, 16, '#c89058'); P(X + 3, Y - 10, 5, 4, '#f8f070'); P(X + 8, Y - 8, 5, 4, '#a0d8f8'); P(X + 4, Y - 3, 6, 4, '#f8a0c0'); }
+    if (t === 'j') { P(X + 4, Y + 3, 8, 12, '#303030'); P(X + 5, Y + 4, 6, 10, '#c8e0e8'); P(X + 4, Y + 2, 8, 2, '#c84848'); P(X + 6, Y + 8, 2, 2, '#f8f070'); P(X + 8, Y + 10, 2, 2, '#f8a0c0'); }
+    if (t === 'w') { P(X + 1, Y - 8, 14, 12, '#303030'); P(X + 2, Y - 7, 12, 10, '#3a86b8'); P(X + 4, Y - 2, 6, 2, '#5a4a40'); P(X + 8, Y - 3, 2, 1, '#5a4a40'); }
+    if (t === 't') { const L = x % 2 ? 0 : 1; P(X + (L ? 2 : 0), Y + (y % 2 ? 0 : 3), L ? 14 : 14, y % 2 ? 12 : 13, '#303030'); P(X + (L ? 3 : 0), Y + (y % 2 ? 0 : 4), 13, y % 2 ? 11 : 12, id === 'galley' ? '#f8f8f0' : '#a87848');
+      if (id === 'galley' && !L && !(y % 2)) { P(X - 2, Y + 8, 4, 4, '#f8e060'); P(X - 1, Y + 6, 2, 2, '#f8a030'); } }
+  }));
+  if (id === 'chapel') for (const wx of [24, 120]) { P(wx, 2, 16, 10, '#303030'); P(wx + 1, 3, 14, 8, '#3870c8'); P(wx + 1, 3, 7, 4, '#d04848'); P(wx + 8, 7, 7, 4, '#f0c030'); P(wx + 7, 3, 1, 8, '#303030'); P(wx + 1, 6, 14, 1, '#303030'); }
+  if (id === 'market') { P(40, 3, 80, 9, '#48a058'); for (let i = 0; i < 80; i += 10) P(40 + i, 3, 5, 9, '#f8f8f0'); }
+  if (id === 'galley') { P(24, 3, 24, 8, '#5a4030'); P(25, 4, 22, 6, '#a8d8f8'); }
+  if (id === 'wharf') { P(40, 2, 48, 10, '#5a4030'); P(41, 3, 46, 8, '#3a86b8'); P(41, 8, 46, 3, '#2a6a98'); }
+  return (insideCanvases[id] = cv);
+}
+function renderInside() {
+  const R = inside();
+  ctx.drawImage(insideCanvas(insideId), 0, 0);
+  const light = lightLevel(), t = performance.now() / 1000;
+  if (insideId === 'chapel') {   // candles flicker
+    const prayers = load('prayers', []).filter(p => !p.answered).length;
+    for (let i = 0; i < Math.min(3, 1 + prayers); i++) { const fx = 16 + 4 + i * 3, on = Math.floor(t * 6 + i) % 3; px(ctx, fx, 16 + 1 - (on ? 1 : 0), 2, 2, on ? '#f8e060' : '#f8a030'); }
+  }
+  if (insideId === 'wharf' && Math.floor(t) % 5 === 0) { px(ctx, 16 + 4, 7 * 16 - 10, 2, 2, '#202020'); }
+  R.map.forEach((row, y) => [...row].forEach((ch, x) => { const n = R.npcs && R.npcs[ch]; if (n) drawChar({ pal: n.pal, dir: 'down', step: 0 }, x * 16, y * 16 - 3, 0); }));
+  if (light === 'night') { ctx.fillStyle = 'rgba(16,24,72,.18)'; ctx.fillRect(0, 0, 160, 144); }
+  const o = chars[1 - active];
+  if (partnerLive() && live.peer.scene === scene && live.peer.view === 'town') { const q2 = posOf(o); drawChar(o, Math.round(q2.x), Math.round(q2.y) - 3, 0); if (live.bubble && live.bubble.until > Date.now()) drawBubble(live.bubble.text, Math.round(q2.x), Math.round(q2.y) - 3); }
+  const c = chars[active], q = posOf(c), frame = c.moving && c.t > .2 && c.t < .8 ? 1 + c.step : 0;
+  drawChar(c, Math.round(q.x), Math.round(q.y) - 3, frame);
+  if (live.bubbleMine && live.bubbleMine.until > Date.now()) drawBubble(live.bubbleMine.text, Math.round(q.x), Math.round(q.y) - 3);
+}
+
+// ----- the prayer candles: a shared prayer list -----
+const prayerList = () => load('prayers', []);
+PANELS.prayers = { title: 'PRAYER CANDLES', color: '#a87850', render() {
+  const list = prayerList().slice().sort((a, b) => (a.answered ? 1 : 0) - (b.answered ? 1 : 0) || b.at - a.at);
+  return `<div class="box"><h3>LIGHT A CANDLE</h3><p class="muted">ADD SOMETHING TO PRAY ABOUT. ${esc(nameOf(1 - active))} GETS A NOTE TO PRAY WITH YOU.</p>
+      <form class="stack" id="prForm"><input class="px" id="prText" maxlength="120" placeholder="Margo's checkup on Friday"><button class="px">LIGHT A CANDLE (+2 PTS)</button></form></div>
+    <div class="box"><h3>OUR PRAYERS</h3>${list.map(p => `<div class="day"><p>${esc(p.text)}</p><p class="muted">${esc(nameOf(p.by))} · ${relDay(p.at).toUpperCase()}${p.prayed && p.prayed.length ? ` · PRAYED BY ${p.prayed.map(i => esc(nameOf(i))).join(' & ')}` : ''}${p.answered ? ' · ANSWERED!' : ''}</p>
+      ${p.answered ? '' : `<div class="form-row">${(p.prayed || []).includes(active) ? '' : `<button class="px mini pr-pray" data-id="${p.id}">I PRAYED</button>`}<button class="px mini pr-yes" data-id="${p.id}">ANSWERED</button></div>`}</div>`).join('') || '<p class="muted">NO CANDLES LIT YET.</p>'}</div>`;
+}, bind(body) {
+  $('prForm').addEventListener('submit', e => {
+    e.preventDefault(); const text = $('prText').value.trim(); if (!text) return;
+    const p = { id: uid(), text, by: active, at: Date.now(), prayed: [active] };
+    mem.prayers = [...prayerList(), p].slice(-60); noteAdded('prayers', p); save('prayers');
+    capAward('prayer', 4, 2); track('prayer'); notifyPartner('prayer', `${titleCase(nameOf(active))} lit a prayer candle`, text);
+    renderPanel();
+  });
+  const upd = (id, fn) => { mem.prayers = prayerList().map(p => p.id === id ? fn({ ...p }) : p); save('prayers'); renderPanel(); };
+  body.querySelectorAll('.pr-pray').forEach(el => el.addEventListener('click', () => { upd(el.dataset.id, p => ({ ...p, prayed: [...new Set([...(p.prayed || []), active])] })); capAward('prayer', 4, 1); track('prayer'); }));
+  body.querySelectorAll('.pr-yes').forEach(el => el.addEventListener('click', () => { upd(el.dataset.id, p => ({ ...p, answered: Date.now() })); sfx.play('catch'); }));
+} };
+
+
+// ---------- Margo & pets: one-tap care log, "last fed" timers, and a pet health schedule ----------
+Object.assign(CHORES, {
+  feed_margo: { name: 'Feed Margo', pts: 2, max: 10, verb: 'FEED!', done: 'Margo is full and happy.', care: true },
+  wake:       { name: 'Margo woke up', pts: 0, max: 8, verb: 'HI!', done: 'Good morning, Margo!', care: true },
+  margo_med:  { name: 'Give Margo medicine', pts: 1, max: 4, verb: 'GIVE!', done: 'Medicine given. Brave girl.', care: true },
+});
+STATIONS.c.chores = ['feed_margo', 'diaper', 'nap', 'bath'];
+const CARE_IDS = new Set(['feed_margo', 'wake', 'margo_med', 'diaper', 'nap', 'bath', 'feed_dogs', 'walk_real', 'feed_cat', 'litter', 'poop']);
+const agoText = ms => { const m = Math.max(0, Math.round((Date.now() - ms) / 60000)); return m < 1 ? 'just now' : m < 60 ? `${m}m ago` : m < 24 * 60 ? `${Math.floor(m / 60)}h ${m % 60 ? (m % 60) + 'm ' : ''}ago` : relDay(ms); };
+const lastOf = id => lastDone([id]);
+const todayOf = id => { const d = dateKey(new Date()); return choreLog().filter(e => e.id === id && e.day === d).sort((a, b) => a.at - b.at); };
+const DEFAULT_PETCARE = [
+  { id: 'heartworm', name: 'Heartworm pills (Moose & Maisy)', every: 30, last: null },
+  { id: 'flea', name: 'Flea & tick (Moose & Maisy)', every: 30, last: null },
+  { id: 'skflea', name: 'Flea treatment (SK)', every: 30, last: null },
+  { id: 'nails', name: 'Nail trims', every: 21, last: null },
+  { id: 'vet', name: 'Vet checkups', every: 365, last: null },
+];
+const petCare = () => load('petcare', DEFAULT_PETCARE);
+const dueIn = p => p.last ? Math.round((new Date(p.last + 'T00:00') - startOfToday()) / 864e5) + p.every : 0;
+const dueText = n => n < 0 ? `${-n} day${n === -1 ? '' : 's'} overdue` : n === 0 ? 'Due today' : n === 1 ? 'Due tomorrow' : `Due in ${n} days`;
+function careLine(label, e, extra) {
+  return `<div class="care-line"><span class="care-l">${label}</span><span class="muted2">${e ? `${agoText(e.at)} &middot; ${esc(titleCase(nameOf(e.by)))}` : 'Not logged yet'}${extra || ''}</span></div>`;
+}
+const careBtn = (id, label) => { const c = CHORES[id], maxed = choresToday(id) >= c.max; return `<button class="chip ${maxed ? 'done' : ''}" data-act="care" data-id="${id}">${label}</button>`; };
+function careCard(full) {
+  const fed = lastOf('feed_margo'), nap = lastOf('nap'), wake = lastOf('wake'), napping = nap && (!wake || nap.at > wake.at) && Date.now() - nap.at < 5 * 3600e3;
+  const dogs = todayOf('feed_dogs'), sk = todayOf('feed_cat'), walk = todayOf('walk_real');
+  const due = petCare().map(p => [p, dueIn(p)]).filter(([p, n]) => p.last && n <= 3).sort((a, b) => a[1] - b[1]);
+  const dogTxt = dogs.length ? dogs.map(e => `${new Date(e.at).getHours() < 14 ? 'AM' : 'PM'} ${fmtTime(e.at).toLowerCase()} (${esc(titleCase(nameOf(e.by)))})`).join(', ') : 'Not fed yet today';
+  return `<section class="card"><div class="card-h"><span class="eyebrow">Margo &amp; pets</span>${full ? '' : '<button class="link" data-act="list" data-sub="care">Schedule</button>'}</div>
+    ${napping ? `<div class="care-line"><span class="care-l">Napping</span><span style="font-weight:800; color:var(--a-bay)">since ${fmtTime(nap.at).toLowerCase()}</span></div>` : ''}
+    ${careLine('Last fed', fed)}${careLine('Last diaper', lastOf('diaper'))}${!napping ? careLine('Last nap', nap) : ''}${lastOf('margo_med') && Date.now() - lastOf('margo_med').at < 864e5 ? careLine('Medicine', lastOf('margo_med')) : ''}
+    <div class="chips" style="margin:8px 0 12px">${careBtn('feed_margo', '🍼 Fed')}${careBtn('diaper', 'Diaper')}${napping ? careBtn('wake', '☀️ Woke up') : careBtn('nap', '😴 Nap')}${careBtn('margo_med', 'Meds')}</div>
+    <div class="care-line"><span class="care-l">Moose &amp; Maisy</span><span class="muted2">${dogTxt}</span></div>
+    <div class="care-line"><span class="care-l">Walk</span><span class="muted2">${walk.length ? `${agoText(walk[walk.length - 1].at)} &middot; ${esc(titleCase(nameOf(walk[walk.length - 1].by)))}` : 'Not yet today'}</span></div>
+    <div class="care-line"><span class="care-l">SK</span><span class="muted2">${sk.length ? `Fed ${agoText(sk[sk.length - 1].at)}` : 'Not fed yet today'}</span></div>
+    <div class="chips" style="margin-top:8px">${careBtn('feed_dogs', 'Fed dogs')}${careBtn('walk_real', 'Walked')}${careBtn('feed_cat', 'Fed SK')}${careBtn('litter', 'Litter')}</div>
+    ${due.length ? `<div style="margin-top:12px">${due.map(([p, n]) => `<div class="care-line"><span class="care-l" style="color:${n < 0 ? 'var(--a-red, #c0442c)' : 'inherit'}">${esc(p.name)}</span><span class="row2"><span class="muted2">${dueText(n)}</span><button class="btn sm" data-act="petdone" data-id="${p.id}">Done</button></span></div>`).join('')}</div>` : ''}</section>`;
+}
+function careScreen() {
+  const list = petCare(), recent = choreLog().filter(e => CARE_IDS.has(e.id) && e.at > Date.now() - 2 * 864e5).sort((a, b) => b.at - a.at).slice(0, 20);
+  return careCard(true) + `<section class="card"><div class="card-h"><span class="eyebrow">Pet health schedule</span></div>
+      ${list.map(p => { const n = dueIn(p); return `<div class="item"><div class="txt"><span>${esc(p.name)}</span><div class="meta">Every ${p.every === 365 ? 'year' : p.every + ' days'} &middot; ${p.last ? `last ${new Date(p.last + 'T12:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} &middot; ${dueText(n)}` : 'Tap Done the next time you do it'}</div></div><button class="btn sm ${p.last && n > 3 ? 'ghost' : ''}" data-act="petdone" data-id="${p.id}">Done</button><button class="x" data-act="petdel" data-id="${p.id}" aria-label="Remove">&times;</button></div>`; }).join('')}
+      <form class="stack2" data-form="petcare" style="margin-top:12px"><input class="in" name="name" maxlength="50" placeholder="Margo's vitamin D drops" aria-label="What"><div class="row2"><span class="muted2">Every</span><input class="in" name="every" type="number" inputmode="numeric" min="1" max="365" value="30" aria-label="Days" style="flex:0 0 80px"><span class="muted2">days</span><button class="btn">Add</button></div></form>
+      <p class="muted2" style="margin:8px 0 0">You'll both get a reminder on the morning something is due (once notifications are on).</p></section>
+    <section class="card"><div class="card-h"><span class="eyebrow">Last 2 days</span></div>${recent.map(e => `<div class="item"><div class="txt"><span>${esc(CHORES[e.id].name)}</span><div class="meta">${esc(titleCase(nameOf(e.by)))} &middot; ${relDay(e.at)}, ${fmtTime(e.at)}</div></div>${e.by === active ? `<button class="x" data-act="unchore" data-at="${e.at}" data-id="${e.id}" aria-label="Remove this entry">&times;</button>` : ''}</div>`).join('') || '<p class="empty">Nothing logged yet.</p>'}</section>`;
+}
+
+// ---------- Phone notifications (website only): messages, check-ins, photos, prayers, reminders ----------
+function notifyPartner(kind, title, body) {
+  try { if (window.FT_WEB && FT_WEB.notify) FT_WEB.notify({ kind, title: String(title).slice(0, 60), body: String(body || '').slice(0, 160) }).catch(() => {}); } catch (e) { /* notifications are optional */ }
+}
+const PUSH_KINDS = [['message', 'Messages'], ['checkin', 'Check-ins'], ['photo', 'Photos'], ['prayer', 'Prayer candles'], ['remind', 'Daily reminders']];
+let pushInfo = { state: 'loading', prefs: {} };
+async function refreshPush() {
+  if (!window.FT_WEB || !FT_WEB.pushState) pushInfo = { state: 'artifact', prefs: {} };
+  else try { pushInfo = await FT_WEB.pushState(); } catch (e) { pushInfo = { state: 'unsupported', prefs: {} }; }
+  if (appOpen && appTab === 'us' && usTab === 'settings') renderApp();
+}
+function notifyCard() {
+  const s = pushInfo.state, p = pushInfo.prefs || {};
+  const body = s === 'artifact' ? '<p class="muted2" style="margin:0">Phone notifications work on the Family Town website (family-town-eta.vercel.app), saved to your Home Screen.</p>'
+    : s === 'install' ? `<p class="muted2" style="margin:0 0 8px">First save Family Town to your Home Screen. iPhones only allow notifications from apps on the Home Screen:</p><ol class="muted2" style="margin:0; padding-left:20px; line-height:1.6"><li>Open this page in Safari</li><li>Tap the Share button</li><li>Tap <b>Add to Home Screen</b></li><li>Open Family Town from your Home Screen and come back here</li></ol>`
+    : s === 'denied' ? '<p class="muted2" style="margin:0">Notifications are blocked. Turn them on in your iPhone\'s Settings &gt; Notifications &gt; Family Town, then come back.</p>'
+    : s === 'unsupported' ? '<p class="muted2" style="margin:0">This browser can\'t show notifications. On iPhone, open Family Town from your Home Screen.</p>'
+    : s === 'off' ? `<p class="muted2" style="margin:0 0 10px">Get a ping when ${esc(partnerName())} messages you, checks in, adds a photo, or lights a prayer candle, plus a few gentle reminders each day.</p><button class="btn" data-act="pushon" style="width:100%">Turn on notifications</button>`
+    : s === 'on' ? `<p class="muted2" style="margin:0 0 10px">On for this phone. Choose what pings you:</p><div class="chips">${PUSH_KINDS.map(([k, l]) => `<button class="chip ${p[k] === false ? '' : 'on'}" data-act="pushpref" data-k="${k}">${l}</button>`).join('')}</div>
+      <div class="row2" style="margin-top:12px"><button class="btn ghost sm" data-act="pushtest">Send a test</button><button class="link" data-act="pushoff" style="color:var(--a-soft)">Turn off on this phone</button></div>
+      <p class="muted2" style="margin:10px 0 0; font-size:13px">Daily reminders: a morning rundown (calendar, dinner plan, pet meds due) and an evening nudge (check-in, quests, the Sunday recap).</p>`
+    : '<p class="muted2" style="margin:0">Checking...</p>';
+  return `<section class="card"><div class="card-h"><span class="eyebrow">Notifications</span></div>${body}</section>`;
 }
 
 // ---------- A pick-one menu (riddles, seeds, yard sales) ----------
@@ -3644,7 +4235,8 @@ function drawReflections(camX, camY, light) {
     ['#e04848', '#3a86b8', '#f0c030'].forEach((c, i) => { const bx = sx - 4 + i * 8, by = sy - 18 + Math.round(Math.sin(t * 2 + i) * 2); px(ctx, bx + 2, by + 7, 1, 10, '#505058'); px(ctx, bx, by, 6, 7, c); px(ctx, bx + 1, by + 1, 2, 2, '#ffffff'); }); }
 }
 function drawFireworks() {
-  if (!hasUnlock('fireworks') || new Date().getDay() !== 6 || lightLevel() !== 'night') return;
+  const july4 = MONTH === 6 && new Date().getDate() <= 7;
+  if ((!july4 && (!hasUnlock('fireworks') || new Date().getDay() !== 6)) || lightLevel() !== 'night') return;
   const t = performance.now() / 1000;
   for (let k = 0; k < 2; k++) { const cyc = (t * .6 + k * .5) % 1, cx = 40 + ((Math.floor(t * .6 + k * .5) * 53 + k * 37) % 80), cy = 30 + k * 14;
     if (cyc < .25) px(ctx, cx, Math.round(140 - cyc * 4 * (140 - cy)), 1, 3, '#f8e060');
@@ -3765,6 +4357,7 @@ function render() {
   if (mode === 'arcade') { renderFixed(renderArcade); return; }
   if (mode === 'mini') { renderFixed(() => mini.render()); return; }
   if (scene === 'house') { renderFixed(renderHouse); return; }
+  if (scene.startsWith('in:')) { renderFixed(renderInside); return; }
   const p = posOf(chars[active]);
   const camX = Math.max(0, Math.min(MW * 16 - VW * 16, Math.round(p.x + 8 - VW * 8)));
   const camY = Math.max(0, Math.min(MH * 16 - VH * 16, Math.round(p.y + 8 - VH * 8)));
@@ -3776,9 +4369,10 @@ function render() {
   for (const p of PUMPKINS) drawPumpkin(p.x * 16 - camX, p.y * 16 - camY, light !== 'day');
   drawCoastLife(camX, camY, light);
   drawHappenings(camX, camY);
+  drawSeason(camX, camY, light);
   drawReflections(camX, camY, light);
   // SK only shows up when you're close. She's hiding!
-  const partnerAway = partnerLive() && live.peer.scene === 'house';
+  const partnerAway = partnerLive() && !!live.peer.scene && live.peer.scene !== 'town';
   const ents = [...chars.filter((c, i) => i === active || !partnerAway), ...NPCS, ...PETS.filter(p => p.kind === 'dog' || dist(p, chars[active]) <= 3)];
   for (const e of ents.sort((a, b) => posOf(a).y - posOf(b).y)) {
     const q = posOf(e), frame = e.moving && e.t > .2 && e.t < .8 ? 1 + e.step : 0;
@@ -3816,7 +4410,7 @@ function logChore(id) {
   if (!ch || choresToday(id) >= ch.max) return null;
   const entry = { id, by: active, at: Date.now(), day: dateKey(new Date()) }, cutoff = Date.now() - 60 * 864e5;
   mem.chorelog = [...choreLog(), entry].filter(e => e.at > cutoff); noteAdded('chorelog', entry); save('chorelog');
-  addPoints(active, ch.pts); track('chore'); track('chore_' + id);
+  addPoints(active, ch.pts); if (!ch.care) track('chore'); track('chore_' + id); if (CARE_IDS.has(id)) track('care');
   return entry;
 }
 function undoChore(e) {
@@ -3902,6 +4496,10 @@ function postChat(msg) {
   const n = { id: uid(), by: active, at: Date.now(), hearts: [], type: 'text', ...msg };
   mem.notes = [...notesList(), n].slice(-400); noteAdded('notes', n); save('notes');
   if (n.type === 'text') track('note');
+  { const me = titleCase(nameOf(active));
+    if (n.type === 'text') notifyPartner('message', me, n.text);
+    else if (n.type === 'sticker') notifyPartner('message', me, `Sent you ${n.text}`);
+    else if (n.type === 'invite') notifyPartner('message', me, `Meet me in Family Town at ${GAMES[n.game] ? GAMES[n.game].place : 'the park'}!`); }
   if (partnerLive() && n.type === 'text') roomSay(n.text);
   return n;
 }
@@ -4441,6 +5039,8 @@ const TAB_RENDER = {
       ${recapCard()}
       ${focusCard()}
       ${checkinCard()}
+      ${questsCard()}
+      ${careCard()}
       <section class="card"><div class="card-h"><span class="eyebrow">Today</span><button class="link" data-act="newev">+ Add</button></div>
         ${today.map(evCard).join('') || '<p class="empty">Nothing on the calendar today.</p>'}
         ${upcoming.length ? `<div class="eyebrow" style="margin:12px 0 6px">Coming up</div>${upcoming.map(([i, e]) => `<div class="meta muted2" style="margin-top:6px">${i === 1 ? 'Tomorrow' : addDays(i).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}</div>${evCard(e)}`).join('')}` : ''}</section>
@@ -4464,7 +5064,7 @@ const TAB_RENDER = {
         <div class="row2" style="justify-content:space-between; flex-wrap:wrap"><div><div style="font-weight:800">${esc(bibleBook(b.book).name)} ${nextCh}</div><div class="meta muted2">${togetherCount(b)} of ${bibleBook(b.book).ch} read together</div></div><div class="row2">${window.FT_WEB ? `<button class="btn ghost" data-act="esvread" data-q="${esc(bibleBook(b.book).name)} ${nextCh}">Read</button>` : `<a class="btn ghost" href="${passageUrl(bibleBook(b.book).name, nextCh)}" target="_blank" rel="noopener" style="text-decoration:none">Read</a>`}<button class="btn" data-act="readch" data-ch="${nextCh}">I read it</button></div></div></section>` : ''}
       ${dinner ? `<section class="card"><div class="card-h"><span class="eyebrow">Dinner tonight</span><button class="link" data-act="list" data-sub="dinners">Plan</button></div><div style="font-weight:800">${esc(dinner.dish)}</div></section>` : ''}
       <section class="card town-card"><div class="card-h"><span class="eyebrow">In Family Town today</span><span class="eyebrow">Level ${townLevel().level} &middot; ${shells(active)} shells</span></div>
-        <ul>${HAPPENING_NOW.map(h => `<li>${esc(h.title[0].toUpperCase() + h.title.slice(1))}</li>`).join('')}<li>Lost &amp; found: ${lostLeft} thing${lostLeft === 1 ? '' : 's'} missing</li><li>Garden: ${esc(titleCase(gardenSummary()))}</li></ul>
+        <ul>${HAPPENING_NOW.map(h => `<li>${esc(h.title[0].toUpperCase() + h.title.slice(1))}</li>`).join('')}<li>Lost &amp; found: ${lostLeft} thing${lostLeft === 1 ? '' : 's'} missing</li><li>Garden: ${esc(titleCase(gardenSummary()))}</li><li>${SEASON.name}: ${todaysHunt().items.filter((_, i) => todaysHunt().found[i] == null).length} of ${HUNT_N} still hidden</li></ul>
         <div class="row2"><button class="town-btn" data-act="town" style="flex:1">Enter Family Town</button><button class="btn ghost" data-act="us" data-sub="wardrobe">Shop</button></div></section>`;
   },
 
@@ -4516,10 +5116,11 @@ const TAB_RENDER = {
   },
 
   lists() {
-    const segs = [['groceries', 'Groceries'], ['todos', 'To-dos'], ['chores', 'Chores'], ['goals', 'Goals'], ['dinners', 'Dinners'], ['ideas', 'Outing ideas']];
+    const segs = [['groceries', 'Groceries'], ['todos', 'To-dos'], ['chores', 'Chores'], ['care', 'Margo & pets'], ['goals', 'Goals'], ['dinners', 'Dinners'], ['ideas', 'Outing ideas']];
     const seg = `<div class="seg">${segs.map(([k, l]) => `<button class="chip ${listTab === k ? 'on' : ''}" data-act="list" data-sub="${k}">${l}</button>`).join('')}</div>`;
     let body = '';
     if (listTab === 'chores') body = choresScreen();
+    else if (listTab === 'care') body = careScreen();
     else if (listTab === 'groceries') {
       const items = listItems('groceries').map((it, i) => [it, i]), open = items.filter(([it]) => !it.done), got = items.filter(([it]) => it.done);
       body = `<section class="card"><form class="row2" data-form="add" data-key="groceries"><input class="in" name="t" maxlength="60" placeholder="Avocados" aria-label="Add a grocery"><button class="btn">Add</button></form>
@@ -4635,6 +5236,7 @@ function settingsScreen() {
       <div class="row2"><button class="chip ${snd.fx ? 'on' : ''}" data-act="sndtoggle" data-k="fx">Game sounds ${snd.fx ? 'on' : 'off'}</button><button class="chip ${snd.music ? 'on' : ''}" data-act="sndtoggle" data-k="music">Town music ${snd.music ? 'on' : 'off'}</button></div></section>
     <section class="card"><div class="card-h"><span class="eyebrow">Family Town</span></div>
       <button class="btn ghost" data-act="replayintro" style="width:100%">Show the town welcome again</button></section>
+    ${notifyCard()}
     ${accountCard()}`;
 }
 function accountCard() {
@@ -4776,7 +5378,7 @@ function saveCheckin(entry) {
   all[k] = { ...entry, at: Date.now() };
   for (const d of Object.keys(all)) if (d < cutoff) delete all[d];
   save('checkin' + active);
-  if (first) { capAward('checkin', 3, 3); track('checkin'); }
+  if (first) { capAward('checkin', 3, 3); track('checkin'); notifyPartner('checkin', `${titleCase(nameOf(active))} checked in`, [entry.mood && `Feeling ${String(entry.mood).toLowerCase()}`, entry.feel, entry.thankful && `Thankful for ${entry.thankful}`].filter(Boolean).join('. ') || 'Tap to see how they are doing.'); }
 }
 const ciBox = (who, c) => `<div class="ci"><div class="row2">${ava(who, 28)}<b>${esc(titleCase(nameOf(who)))}</b></div>${c
   ? `<p>Feeling <span class="mood">${esc((c.mood || '').toLowerCase())}</span>${c.feel ? `${c.mood ? ': ' : ''}${esc(c.feel)}` : ''}</p>${c.thankful ? `<p>Thankful for ${esc(c.thankful)}</p>` : ''}${c.pray ? `<p class="muted2">Pray for: ${esc(c.pray)}</p>` : ''}`
@@ -4964,6 +5566,7 @@ async function takeDailyPhoto(file, part) {
   if (!entry.url) { entry.local = true; localPics[entry.id] = pic.dataUrl; try { await photoDB.put({ id: entry.id, data: pic.dataUrl, caption: `${titleCase(part)} photo`, at: entry.at, by: active }); } catch (e) { /* memory only */ } }
   mem.photolog = [...photoLog(), entry]; noteAdded('photolog', entry); save('photolog');
   const e = capAward('dphoto_' + part, 5, 5); track('dphoto');
+  notifyPartner('photo', `${titleCase(nameOf(active))} added a photo`, `A new ${part} photo for today.`);
   appToast(`${titleCase(part)} photo saved${e ? ' · +5' : ''}${entry.local ? ' (on this phone only)' : ''}`);
   renderApp();
 }
@@ -5055,6 +5658,7 @@ function renderApp() {
   main.dataset.tab = appTab;
   if (appTab === 'chat') { chatSeenMark(); main.scrollTop = main.scrollHeight; } else main.scrollTop = sameTab ? keep : 0;
   if (appTab === 'us' && usTab === 'wardrobe') drawWardPreview();
+  if (appTab === 'us' && usTab === 'settings' && pushInfo.state === 'loading') { pushInfo.state = 'checking'; refreshPush(); }
   const unread = unreadNotes().length;
   $('aTabs').innerHTML = TABS.map(([k, l, rule]) => `<button class="${appTab === k ? 'on' : ''}" data-tab="${k}" aria-label="${l}">${icon(k, rule)}${l}${k === 'chat' && unread && appTab !== 'chat' ? `<span class="badge">${unread}</span>` : ''}</button>`).join('');
   pushPresence();
@@ -5097,6 +5701,17 @@ function onAppClick(e) {
       if (!entry) { appToast(`Already logged "${CHORES[d.id].name}" ${CHORES[d.id].max === 1 ? 'today' : CHORES[d.id].max + ' times today'}`); break; }
       sfx.play('coin'); appToast(`${CHORES[d.id].name} +${CHORES[d.id].pts}`, () => undoChore(entry)); renderApp(); break;
     }
+    case 'care': {
+      const c = CHORES[d.id], entry = logChore(d.id);
+      if (!entry) { appToast(`Already logged "${c.name}" ${c.max} times today`); break; }
+      sfx.play('coin'); appToast(`${c.name}${c.pts ? ' +' + c.pts : ''}`, () => undoChore(entry)); renderApp(); break;
+    }
+    case 'petdone': { mem.petcare = petCare().map(p => p.id === d.id ? { ...p, last: dateKey(new Date()), by: active } : p); save('petcare'); track('care'); appToast('Done. Next reminder is set.'); renderApp(); break; }
+    case 'petdel': { mem.petcare = petCare().filter(p => p.id !== d.id); save('petcare'); renderApp(); break; }
+    case 'pushon': { FT_WEB.pushEnable(active).then(st => { pushInfo = { state: st, prefs: {} }; appToast(st === 'on' ? 'Notifications are on' : 'Notifications were not allowed'); renderApp(); }).catch(() => appToast("Couldn't turn on notifications. Try again.")); break; }
+    case 'pushoff': { FT_WEB.pushDisable().then(() => { pushInfo = { state: 'off', prefs: {} }; renderApp(); }); break; }
+    case 'pushpref': { const pr = { ...(pushInfo.prefs || {}) }; pr[d.k] = pr[d.k] === false; pushInfo.prefs = pr; FT_WEB.pushPrefs(pr).catch(() => {}); renderApp(); break; }
+    case 'pushtest': { FT_WEB.notify({ kind: 'test', title: 'Family Town', body: 'Notifications are working!' }).then(r => appToast(r && r.sent ? 'Test sent' : 'No phones to send to yet')).catch(e => appToast(e.message)); break; }
     case 'unchore': { const e2 = choreLog().find(x => String(x.at) === d.at && x.id === d.id && x.by === active); if (e2) undoChore(e2); renderApp(); break; }
     case 'toggle': toggleListItem(d.key, +d.i); renderApp(); break;
     case 'dellist': { const items = listItems(d.key); items.splice(+d.i, 1); save(d.key); renderApp(); break; }
@@ -5203,6 +5818,11 @@ function onAppSubmit(e) {
       appToast('Added'); break;
     }
     case 'note': if (!v('text')) return; sendNote(v('text')); if (appTab !== 'chat') appToast(`Sent to ${partnerName()}`); break;
+    case 'petcare': {
+      if (!v('name')) return;
+      const p = { id: uid(), name: v('name'), every: Math.max(1, Math.min(365, parseInt(v('every'), 10) || 30)), last: null };
+      mem.petcare = [...petCare(), p]; save('petcare'); appToast('Added. Tap Done the next time you do it.'); break;
+    }
     case 'goal': {
       if (!v('t')) return;
       const g = { id: uid(), t: v('t'), target: Math.max(1, Math.min(50, parseInt(v('target'), 10) || 1)), period: v('period') || 'week', prog: {}, done: {}, by: active };
