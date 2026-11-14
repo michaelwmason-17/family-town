@@ -62,20 +62,34 @@
     },
     room(ctx) {
       const { sb, fam, me } = ctx;
-      const ch = sb.channel('room-' + fam, { config: { presence: { key: me } } });
-      let peersCb = null, last = null, timer = null, joined = false;
+      // Supabase "presence" is heavily rate-limited (it drops most updates), so where each person is
+      // standing travels by fast "broadcast" messages. Presence is only used to notice joins and leaves.
+      const ch = sb.channel('room-' + fam, { config: { presence: { key: me }, broadcast: { self: false } } });
+      const peers = new Map();   // user id -> { p, at }
+      let peersCb = null, last = null, timer = null, joined = false, sentAt = 0;
       const emit = () => {
         if (!peersCb) return;
-        const st = ch.presenceState();
-        peersCb({ peers: Object.entries(st).map(([k, arr]) => ({ isMe: k === me, kind: 'viewer', presence: (arr[arr.length - 1] || {}).p || null })) });
+        const now = Date.now();
+        for (const [k, v] of peers) if (now - v.at > 45000) peers.delete(k);   // gone quiet: treat as left
+        peersCb({ peers: [{ isMe: true, kind: 'viewer', presence: last }, ...[...peers].map(([k, v]) => ({ isMe: false, kind: 'viewer', presence: v.p }))] });
       };
-      ch.on('presence', { event: 'sync' }, emit).on('presence', { event: 'join' }, emit).on('presence', { event: 'leave' }, emit)
-        .subscribe(status => { if (status === 'SUBSCRIBED') { joined = true; if (last) ch.track({ p: last }); } });
+      const send = () => { if (!joined || !last) return; sentAt = Date.now(); ch.send({ type: 'broadcast', event: 'p', payload: { k: me, p: last } }).catch(() => {}); };
+      ch.on('broadcast', { event: 'p' }, m => { const d = m.payload || {}; if (!d.k || d.k === me) return; peers.set(d.k, { p: d.p, at: Date.now() }); emit(); })
+        .on('broadcast', { event: 'hello' }, m => { if (m.payload && m.payload.k !== me) send(); })   // someone just arrived: tell them where you are
+        .on('presence', { event: 'join' }, x => { if (x.key !== me) send(); })
+        .on('presence', { event: 'leave' }, x => { if (x.key !== me && peers.delete(x.key)) emit(); })
+        .subscribe(status => {
+          if (status === 'SUBSCRIBED') { joined = true; ch.track({ on: 1 }).catch(() => {}); ch.send({ type: 'broadcast', event: 'hello', payload: { k: me } }).catch(() => {}); send(); }
+          else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') joined = false;
+        });
+      // a heartbeat every 5 seconds keeps you visible even while standing still
+      setInterval(() => { if (Date.now() - sentAt > 5000) send(); emit(); }, 5000);
+      document.addEventListener('visibilitychange', () => { if (!document.hidden) { ch.send({ type: 'broadcast', event: 'hello', payload: { k: me } }).catch(() => {}); send(); } });
       return {
         onPeers(cb) { peersCb = cb; emit(); },
-        presence(p) {   // the app sends updates often; send at most ~8 a second
+        presence(p) {   // the app sends updates often; send at most ~10 a second
           last = p;
-          if (!timer) timer = setTimeout(() => { timer = null; if (joined) ch.track({ p: last }); }, 120);
+          if (!timer) timer = setTimeout(() => { timer = null; send(); }, 90);
           return Promise.resolve();
         },
       };

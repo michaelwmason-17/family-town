@@ -151,7 +151,7 @@
   .player { display:flex; align-items:center; gap:10px; min-width:0; }
   .player.right { flex-direction:row-reverse; text-align:right; }
   .player .nm { font-weight:800; font-size:15px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .ava { width:40px; height:40px; image-rendering:pixelated; background:var(--a-bay-soft); border-radius:12px; flex:none; }
+  .ava { width:40px; height:40px; object-fit:contain; object-position:center bottom; image-rendering:pixelated; background:var(--a-bay-soft); border-radius:12px; flex:none; }
   .crown-tag { font-size:11px; font-weight:800; color:var(--a-gold); letter-spacing:.06em; }
   .vs { font-family:var(--f-display); color:var(--a-soft); font-size:14px; }
   .bar2 { height:10px; background:var(--a-bay-soft); border-radius:99px; overflow:hidden; margin-top:6px; }
@@ -234,7 +234,7 @@
   .btn.sm { padding:6px 10px; font-size:14px; }
   .ward-top { display:flex; flex-direction:column; gap:12px; align-items:center; }
   .ward-top .seg { align-self:stretch; justify-content:center; }
-  #wardPreview { width:min(100%, 330px); aspect-ratio:60/22; image-rendering:pixelated; background:linear-gradient(#cfe8f4, #eaf5fa); border-radius:14px; }
+  #wardPreview { width:min(100%, 330px); aspect-ratio:60/30; image-rendering:pixelated; background:linear-gradient(#cfe8f4, #eaf5fa); border-radius:14px; }
   .swatches { display:flex; flex-wrap:wrap; gap:10px; }
   .sw { width:36px; height:36px; border-radius:50%; border:2px solid var(--a-line); cursor:pointer; padding:0; }
   .sw.on { outline:3px solid var(--a-bay); outline-offset:2px; }
@@ -764,7 +764,7 @@ for (let y = 42; y < MH - 1; y++) for (let x = 2; x < 44; x++) {
 }
 for (let y = 0; y < MH; y++) for (let x = 0; x < MW; x++) if (map[y][x] === 'G' && hash(x, y) % 10 === 0) map[y][x] = 'F';
 
-const SOLID = new Set(['j', 'T', 'W', 'B', 'S', 'Q', 'M', 'K', 'O', 'X', 'Y', 'E', 'V', 'Z', 'H', 'J', 'U', 'N', 'c']);
+const SOLID = new Set(['q', 'j', 'T', 'W', 'B', 'S', 'Q', 'M', 'K', 'O', 'X', 'Y', 'E', 'V', 'Z', 'H', 'J', 'U', 'N', 'c']);
 
 // ---------- Pixel art (drawn in code for now; swap in an art pack later) ----------
 const world = document.createElement('canvas');
@@ -1119,28 +1119,75 @@ function hatParts(p, d, bob) {
     default: return [];
   }
 }
-function drawChar(c, sx, sy, frame) {
-  const p = c.pal, d = c.dir, side = d === 'left' || d === 'right', flip = d === 'right', bob = frame ? -1 : 0;
-  const parts = [];
-  if (side) {
-    if (frame) parts.push([5, 12, 2, 2, p.pants], [9, 12, 2, 2, p.pants]); else parts.push([6, 12, 4, 2, p.pants]);
-    parts.push([5, 8 + bob, 6, 4, p.shirt], [4, 4 + bob, 6, 4, p.skin]);
-  } else {
-    parts.push([5, 12, 2, frame === 1 ? 1 : 2, p.pants], [9, 12, 2, frame === 2 ? 1 : 2, p.pants]);
-    parts.push([5, 8 + bob, 6, 4, p.shirt], [4, 8 + bob, 1, 3, p.shirt], [11, 8 + bob, 1, 3, p.shirt]);
-    if (d !== 'up') parts.push([5, 4 + bob, 6, 4, p.skin]);
+// Characters are 16 wide and 24 tall: a big head with a real face, arms with hands, legs with shoes.
+// (sx, sy) is still the top-left of the 16x16 tile they stand on; the extra height rises above it.
+function hairParts2(p, d) {
+  const h = p.hair, s = p.style || (p.long ? 'long' : 'short'), side = d === 'left' || d === 'right';
+  if (d === 'up') {
+    const out = s === 'buzz' ? [[4, 1, 8, 6, h]] : [[4, 0, 8, s === 'long' ? 13 : 9, h]];
+    if (s === 'curly') out.push([3, -1, 10, 8, h]);
+    if (s === 'bun') out.push([6, -2, 4, 3, h]);
+    if (s === 'ponytail') out.push([7, 8, 2, 5, h]);
+    if (s === 'long') out.push([3, 3, 10, 9, h]);
+    return out;
   }
-  parts.push(...hairParts(p, d, bob), ...hatParts(p, d, bob));
+  if (side) {
+    if (s === 'buzz') return [[4, 1, 8, 2, h], [9, 3, 3, 2, h]];
+    const out = [[4, 0, 8, 3, h], [8, 2, 4, 5, h], [4, 3, 2, 1, h]];
+    if (s === 'long') out.push([8, 2, 4, 10, h]);
+    if (s === 'curly') out.push([3, -1, 10, 3, h], [10, 2, 3, 6, h]);
+    if (s === 'bun') out.push([9, -2, 3, 3, h]);
+    if (s === 'ponytail') out.push([11, 3, 3, 6, h]);
+    return out;
+  }
+  if (s === 'buzz') return [[4, 1, 8, 2, h]];
+  const out = [[4, 0, 8, 3, h], [4, 3, 1, 3, h], [11, 3, 1, 3, h], [5, 3, 3, 1, h]];
+  if (s === 'long') out.push([3, 2, 2, 10, h], [11, 2, 2, 10, h]);
+  if (s === 'curly') out.push([3, -1, 10, 4, h], [3, 3, 1, 4, h], [12, 3, 1, 4, h]);
+  if (s === 'bun') out.push([6, -2, 4, 3, h]);
+  if (s === 'ponytail') out.push([12, 2, 2, 5, h]);
+  if (s === 'short') out.push([8, 3, 2, 1, h]);
+  return out;
+}
+function drawChar(c, sx, sy, frame) {
+  const p = c.pal, d = c.dir || 'down', side = d === 'left' || d === 'right', flip = d === 'right', bob = frame ? -1 : 0;
+  const shoe = '#3a2a20', oy = sy - 8, parts = [];
+  // legs and shoes (the walking frames lift one foot)
+  if (side) {
+    if (!frame) parts.push([6, 18, 4, 3, p.pants], [5, 21, 5, 2, shoe]);
+    else parts.push([5, 18, 2, 3, p.pants], [4, 20, 3, 2, shoe], [9, 18, 2, 3, p.pants], [9, 21, 3, 2, shoe]);
+    parts.push([6, 16 + bob, 5, 2, p.pants], [6, 11 + bob, 5, 5, p.shirt]);
+  } else {
+    const l = frame === 1 ? -1 : 0, r = frame === 2 ? -1 : 0;
+    parts.push([5, 18 + l, 2, 3, p.pants], [5, 21 + l, 2, 2, shoe], [9, 18 + r, 2, 3, p.pants], [9, 21 + r, 2, 2, shoe]);
+    parts.push([5, 16 + bob, 6, 2, p.pants], [5, 11 + bob, 6, 5, p.shirt]);
+    // arms swing opposite the legs
+    const al = frame === 2 ? -1 : 0, ar = frame === 1 ? -1 : 0;
+    const sl = shade(p.shirt, .82); parts.push([3, 11 + bob + al, 2, 3, sl], [3, 14 + bob + al, 2, 2, p.skin], [11, 11 + bob + ar, 2, 3, sl], [11, 14 + bob + ar, 2, 2, p.skin]);
+  }
+  parts.push([7, 10 + bob, 2, 1, p.skin], [4, 2 + bob, 8, 8, p.skin]);
+  if (side) parts.push([3, 6 + bob, 1, 2, p.skin]);   // nose
+  if (side) { const ax = frame === 1 ? 5 : frame === 2 ? 9 : 7; parts.push([ax, 11 + bob, 2, 3, shade(p.shirt, .82)], [ax, 14 + bob, 2, 2, p.skin]); }
+  for (const [x, y, wd, ht, col] of hairParts2(p, d)) parts.push([x, y + bob, wd, ht, col]);
+  for (const [x, y, wd, ht, col] of hatParts(p, d, bob)) parts.push([x, y - 1, wd, ht, col]);
   const X = (x, wd) => sx + (flip ? 16 - x - wd : x);
   ctx.fillStyle = 'rgba(0,0,0,.22)'; ctx.fillRect(sx + 3, sy + 14, 10, 2);
-  for (const [x, y, wd, ht] of parts) px(ctx, X(x, wd) - 1, sy + y - 1, wd + 2, ht + 2, '#202020');
-  for (const [x, y, wd, ht, col] of parts) px(ctx, X(x, wd), sy + y, wd, ht, col);
-  if (p.motif && d === 'down') for (const [x, y, col] of p.motif) px(ctx, sx + x, sy + y + bob, 1, 1, col);
-  if (side) px(ctx, X(5, 1), sy + 5 + bob, 1, 2, '#202020');
-  else if (d === 'down') { px(ctx, sx + 6, sy + 5 + bob, 1, 2, '#202020'); px(ctx, sx + 9, sy + 5 + bob, 1, 2, '#202020'); }
+  for (const [x, y, wd, ht] of parts) px(ctx, X(x, wd) - 1, oy + y - 1, wd + 2, ht + 2, '#202020');
+  for (const [x, y, wd, ht, col] of parts) px(ctx, X(x, wd), oy + y, wd, ht, col);
+  // the face
+  const eye = '#2a2438', blush = '#f0a098', mouth = '#b04848', fy = oy + bob;
+  if (d === 'down') {
+    px(ctx, sx + 5, fy + 5, 2, 2, eye); px(ctx, sx + 9, fy + 5, 2, 2, eye);
+    px(ctx, sx + 6, fy + 5, 1, 1, '#ffffff'); px(ctx, sx + 10, fy + 5, 1, 1, '#ffffff');
+    px(ctx, sx + 5, fy + 7, 1, 1, blush); px(ctx, sx + 10, fy + 7, 1, 1, blush);
+    px(ctx, sx + 7, fy + 8, 2, 1, mouth);
+    if (p.motif) for (const [x, y, col] of p.motif) px(ctx, sx + x, oy + y + 3 + bob, 1, 1, col);
+  } else if (side) {
+    px(ctx, X(5, 1), fy + 5, 1, 2, eye); px(ctx, X(6, 1), fy + 7, 1, 1, blush); px(ctx, X(4, 1), fy + 8, 1, 1, mouth);
+  }
   const i = chars.indexOf(c);
-  if (i === margoWith || c.holdingMargo) drawMargo(sx, sy + bob, d);
-  if (i >= 0 && crownHolder() === i) drawCrown(sx, sy + bob - (p.hat && p.hat !== 'none' && p.hat !== 'bow' ? 2 : 0));
+  if (i === margoWith || c.holdingMargo) drawMargo(sx, sy - 4 + bob, d);
+  if (i >= 0 && crownHolder() === i) drawCrown(sx, oy - 1 + bob - (p.hat && p.hat !== 'none' && p.hat !== 'bow' ? 2 : 0));
 }
 function outlined(parts, X, sy) {
   for (const [x, y, wd, ht, , flat] of parts) if (!flat) px(ctx, X(x, wd) - 1, sy + y - 1, wd + 2, ht + 2, '#202020');
@@ -1389,6 +1436,7 @@ function interact() {
   else if (t === 'T') say(['A big, leafy tree.']);
   else if (t === 'K') say(["A grinning jack-o'-lantern. Spooky season in Family Town!"]);
   else if (t === 'j') centerpieceTalk();
+  else if (t === 'q') choose([['BUILD A SANDCASTLE', startCastle], ['NEVER MIND', () => {}]]);
 }
 
 // ---------- Dialog ----------
@@ -1412,7 +1460,7 @@ $('dialog').addEventListener('click', () => { if (mode === 'dialog') advanceDial
 // ---------- START menu (fast travel) ----------
 const MAIN_MENU = [['QUESTS', 'dq'], ['MISSIONS', 'missions'], ['PLAY', '@play'], ['SAY HI', '@social'], ['SHOP & CLOSET', 'wardrobe'], ['TRAVEL', '@travel'], ['MORE', '@more'], ['CLOSE', 'close']];
 const SUB_MENUS = {
-  '@play': [['GULL GLIDE', 'arc:gull'], ['MOOSE RUN', 'arc:run'], ['BASKETBALL', 'hoops'], ['SOCCER', 'pk'], ['REC CENTER', 'go:rec'], ['MIDNIGHT SNACK', 'arcade'], ['FISHING', 'fish'], ['LULLABY', 'lullaby'], ['DOG WALK', 'dogwalk'], ['HIGH SCORES', 'hiscores'], ['BACK', '@main']],
+  '@play': [['GULL GLIDE', 'arc:gull'], ['MOOSE RUN', 'arc:run'], ['BAY SURF', 'arc:surf'], ['SANDCASTLE', 'arc:castle'], ['BASKETBALL', 'hoops'], ['SOCCER', 'pk'], ['REC CENTER', 'go:rec'], ['MIDNIGHT SNACK', 'arcade'], ['FISHING', 'fish'], ['LULLABY', 'lullaby'], ['DOG WALK', 'dogwalk'], ['HIGH SCORES', 'hiscores'], ['BACK', '@main']],
   '@social': [['EMOTE', '@emote'], ['DANCE', '@dance'], ['MESSAGES', 'chat'], ['BACK', '@main']],
   '@more': [['SCOREBOARD', 'scores'], ['CHALLENGES', 'daily'], ['SOUND & MUSIC', '@options'], ['SWAP PLAYER', 'swap'], ['BACK TO APP', 'app'], ['BACK', '@main']],
   '@travel': [['HOME', 'home'], ['SHELL SHOP', 'go:shop'], ['CHAPEL', 'chapel'], ['MARKET', 'market'], ['THE GALLEY', 'galley'], ['CHOWDER SHACK', 'wharf'], ['REC CENTER', 'go:rec'], ['CARMEL', 'go:carmel'], ['BIG SUR', 'go:bigsur'], ['BACK', '@main']],
@@ -1442,6 +1490,8 @@ function chooseMenu(i) {
   if (id === 'dq') { say(questsSay()); return; }
   if (id === 'arc:gull') { say(['GULL GLIDE: Tap A to flap between the pier posts.', 'Grab sea shells for bonus points. It gets faster!'], () => startMini(gullGlide())); return; }
   if (id === 'arc:run') { say(['MOOSE RUN: Moose is loose on the rec trail!', 'A to jump (tap twice to double jump), DOWN to duck under gulls.'], () => startMini(mooseRun())); return; }
+  if (id === 'arc:surf') { startSurf(); return; }
+  if (id === 'arc:castle') { startCastle(); return; }
   if (id === 'hiscores') { say(hiScoresText()); return; }
   if (id.startsWith('go:')) { const where = id.slice(3);
     if (where === 'rec') { warp(REC_SPOT.x, REC_SPOT.y, 'up'); return; }
@@ -2017,7 +2067,7 @@ function renderArcade() {
 
 // ---------- Weekly stats: high scores, days in the app, and the Sunday awards ----------
 // Each of you writes only your own key (wk0 / wk1), so two phones never overwrite each other.
-const HI_GAMES = { gull: 'Gull Glide', run: 'Moose Run', hoops: 'Basketball', arcade: 'Midnight Snack', tennis: 'Tennis', pong: 'Ping Pong', pickle: 'Pickleball', bowl: 'Bowling', fish: 'Fishing', pk: 'Soccer' };
+const HI_GAMES = { gull: 'Gull Glide', run: 'Moose Run', surf: 'Bay Surf', castle: 'Sandcastle Stack', hoops: 'Basketball', arcade: 'Midnight Snack', tennis: 'Tennis', pong: 'Ping Pong', pickle: 'Pickleball', bowl: 'Bowling', fish: 'Fishing', pk: 'Soccer' };
 const HI_PTS = 10;   // real points for the week's top score in each game
 function myWeek() {
   const k = 'wk' + active, w = load(k, null) || { week: weekKey(), best: {}, days: [] };
@@ -2169,6 +2219,142 @@ function mooseRun() {
   };
 }
 
+// ---------- Bay Surf: ride the wave. UP/DOWN to switch lines, A at the top for an air trick ----------
+function baySurf() {
+  const LANES = [62, 84, 106], g = { lane: 1, y: LANES[1], air: 0, trick: '', trickT: 0, obs: [], shells: [], t: 0, dist: 0, bonus: 0, spawn: 1, speed: 60, state: 'ready', dead: 0, best: myWeek().best.surf || 0 };
+  const score = () => Math.floor(g.dist / 10) + g.bonus;
+  const TRICKS = ['AERIAL!', 'CUTBACK!', 'SHAKA!', 'FLOATER!', '360!'];
+  const KINDS = [{ k: 'kelp', w: 14, lanes: [0, 1, 2] }, { k: 'rock', w: 16, lanes: [2] }, { k: 'seal', w: 14, lanes: [1, 2] }, { k: 'surfer', w: 12, lanes: [0, 1] }, { k: 'jelly', w: 8, lanes: [0, 1, 2] }];
+  const finish = () => {
+    endMini();
+    const sc = score(), e = capAward('surf', 14, Math.floor(sc / 15)), nb = recordScore('surf', sc);
+    say([`You rode ${Math.floor(g.dist / 10)} meters of wave${g.bonus ? ` with ${g.bonus} bonus points of tricks and shells` : ''}!${nb ? ' NEW WEEKLY BEST!' : ''}`, e ? `+${e} shells. Cowabunga.` : 'No shells left today, but your high score still counts!']);
+  };
+  return {
+    hud: () => `BAY SURF<br>SCORE ${score()} BEST ${Math.max(g.best, score())}`,
+    update(dt) {
+      g.t += dt;
+      if (g.state !== 'run') { if (g.state === 'dead' && (g.dead += dt) > 1.4) g.state = 'over'; return; }
+      g.speed = 60 + Math.min(100, g.dist / 50);
+      g.dist += g.speed * dt;
+      const target = LANES[g.lane]; g.y += Math.sign(target - g.y) * Math.min(Math.abs(target - g.y), 140 * dt);
+      if (g.air > 0) { g.air -= dt; if (g.air <= 0) { g.air = 0; g.bonus += 10; sfx.play('coin'); } }
+      if (g.trickT > 0) g.trickT -= dt;
+      if ((g.spawn -= dt) <= 0) {
+        const pool = g.dist > 800 ? KINDS : KINDS.slice(0, 3), o = pool[Math.floor(Math.random() * pool.length)], lane = o.lanes[Math.floor(Math.random() * o.lanes.length)];
+        g.obs.push({ ...o, lane, x: 168, bob: Math.random() * 6 });
+        if (g.dist > 2000 && Math.random() < .35) { const o2 = KINDS[0], l2 = [0, 1, 2].filter(l => l !== lane)[Math.floor(Math.random() * 2)]; g.obs.push({ ...o2, lane: l2, x: 168 + 10, bob: 0 }); }
+        g.spawn = Math.max(.5, 1.4 - g.dist / 3500) + Math.random() * .5;
+        if (Math.random() < .55) g.shells.push({ x: 190 + Math.random() * 30, lane: Math.floor(Math.random() * 3) });
+      }
+      const sx = 34, sw = 18;
+      for (const o of g.obs) { o.x -= g.speed * dt;
+        if (!g.air && Math.abs(LANES[o.lane] - g.y) < 9 && o.x < sx + sw - 4 && o.x + o.w > sx + 4) { g.state = 'dead'; g.dead = 0; sfx.play('bad'); } }
+      for (const s of g.shells) { s.x -= g.speed * dt; if (!s.got && Math.abs(LANES[s.lane] - g.y) < 10 && s.x < sx + sw && s.x + 6 > sx) { s.got = true; g.bonus += 5; sfx.play('coin'); } }
+      g.obs = g.obs.filter(o => o.x > -24); g.shells = g.shells.filter(s => s.x > -8 && !s.got);
+    },
+    a() {
+      if (g.state === 'ready') { g.state = 'run'; return; }
+      if (g.state === 'over') { finish(); return; }
+      if (g.state === 'run' && !g.air) {
+        if (g.lane === 0) { g.air = .75; g.trick = pick(TRICKS); g.trickT = 1; sfx.play('catch'); }
+        else { g.lane--; sfx.play('text'); }
+      }
+    },
+    dir(d) { if (g.state !== 'run' || g.air) return; if (d === 'up' && g.lane > 0) g.lane--; if (d === 'down' && g.lane < 2) g.lane++; },
+    quit() { g.state = 'over'; finish(); },
+    render() {
+      px(ctx, 0, 0, 160, 144, '#a8d8f0'); px(ctx, 120, 10, 14, 14, '#f8e070');
+      const o1 = (g.dist * .15) % 80; for (let i = -1; i < 3; i++) { const x = Math.round(i * 80 - o1); px(ctx, x + 10, 30, 40, 8, '#5a8a5a'); px(ctx, x + 20, 24, 20, 8, '#4a7a4a'); }   // the headland
+      px(ctx, 0, 40, 160, 104, '#2a7ab0');
+      // the wave face: lighter near the lip, foam along the top, whitewater chasing on the left
+      px(ctx, 0, 50, 160, 70, '#3a90c8'); px(ctx, 0, 50, 160, 6, '#5aa8d8');
+      const o2 = (g.t * 40) % 16; for (let x = -16; x < 176; x += 16) { px(ctx, Math.round(x - o2), 48, 10, 3, '#f0f8fc'); px(ctx, Math.round(x - o2) + 4, 46, 6, 2, '#f0f8fc'); }
+      for (let i = 0; i < 6; i++) { const ly = 64 + i * 10, lx = Math.round((i * 37 - g.dist * .8) % 180 + 180) % 180 - 20; px(ctx, lx, ly, 24, 1, '#68b0dc'); }
+      for (let y = 46; y < 124; y += 4) { const w = 14 + Math.round(Math.sin(g.t * 6 + y) * 3); px(ctx, 0, y, w, 4, '#f0f8fc'); px(ctx, w, y + 1, 3, 2, '#d0e8f4'); }
+      px(ctx, 0, 120, 160, 24, '#1a6a9a');
+      for (const s of g.shells) { const x = Math.round(s.x), y = LANES[s.lane] - 4; px(ctx, x - 1, y - 1, 8, 7, '#202020'); px(ctx, x, y, 6, 5, '#f8d0c0'); px(ctx, x + 2, y + 1, 1, 3, '#e8a890'); }
+      for (const o of g.obs) { const x = Math.round(o.x), y = LANES[o.lane], b = Math.round(Math.sin(g.t * 4 + o.bob) * 1);
+        if (o.k === 'kelp') { px(ctx, x, y - 2 + b, 14, 6, '#4a6a28'); px(ctx, x + 2, y - 5 + b, 3, 4, '#6a8a38'); px(ctx, x + 9, y - 4 + b, 3, 3, '#6a8a38'); }
+        else if (o.k === 'rock') { px(ctx, x, y - 6, 16, 10, '#202020'); px(ctx, x + 1, y - 5, 14, 8, '#706860'); px(ctx, x + 3, y - 4, 5, 2, '#908880'); px(ctx, x - 2, y + 3, 20, 2, '#f0f8fc'); }
+        else if (o.k === 'seal') { px(ctx, x, y - 4 + b, 14, 7, '#202020'); px(ctx, x + 1, y - 3 + b, 12, 5, '#7a6a5a'); px(ctx, x + 1, y - 6 + b, 5, 5, '#7a6a5a'); px(ctx, x + 2, y - 5 + b, 1, 1, '#202020'); }
+        else if (o.k === 'jelly') { px(ctx, x, y - 6 + b, 8, 5, '#f0a0d0'); px(ctx, x + 1, y - 1 + b, 1, 4, '#f0a0d0'); px(ctx, x + 4, y - 1 + b, 1, 5, '#f0a0d0'); px(ctx, x + 6, y - 1 + b, 1, 3, '#f0a0d0'); }
+        else { px(ctx, x - 2, y + 1, 16, 3, '#f8d030'); drawChar({ pal: { hair: '#202020', skin: SKIN[2], shirt: '#202838', pants: '#202838' }, dir: 'left' }, x - 2, y - 14, 0); } }
+      // you, on your board
+      const sx = 34, air = g.air ? Math.round(Math.sin((1 - g.air / .75) * Math.PI) * 22) : 0, by = Math.round(g.y) - air;
+      if (g.state === 'dead') { px(ctx, sx, by, 20, 3, '#f8f8f8'); px(ctx, sx + 6, by - 4, 8, 4, '#f0f8fc'); }
+      else { px(ctx, sx - 1, by + 1, 22, 4, '#202020'); px(ctx, sx, by + 2, 20, 2, '#e05048'); px(ctx, sx + 2, by + 2, 4, 1, '#f8f8f8'); drawChar({ ...chars[active], dir: 'right', moving: false }, sx + 2, by - 14, 0); }
+      if (g.trickT > 0) txt(g.trick, 80, 128, '#f8f8f8');
+      if (g.state === 'ready') { px(ctx, 14, 14, 132, 40, '#202020'); px(ctx, 16, 16, 128, 36, '#f8f8f0'); txt('BAY SURF', 80, 20, '#202020'); txt('UP/DOWN: MOVE', 80, 32, '#202020'); txt('A AT THE TOP: TRICK!', 80, 42, '#d04848'); }
+      if (g.state === 'over') { px(ctx, 24, 30, 112, 46, '#202020'); px(ctx, 26, 32, 108, 42, '#f8f8f0'); txt(`SCORE ${score()}`, 80, 38, '#202020'); txt(`BEST ${Math.max(g.best, score())}`, 80, 50, '#3a86b8'); txt('A: DONE', 80, 62, '#d04848'); }
+      else if (g.state !== 'ready') txt(String(score()), 80, 6, '#202020');
+    },
+  };
+}
+
+// ---------- Sandcastle Stack: drop each layer of sand right on top. Perfect drops keep the castle wide ----------
+function castleStack() {
+  const g = { layers: [{ x: 46, w: 68 }], cur: null, dir: 1, speed: 46, state: 'ready', falls: [], perfect: 0, combo: 0, flash: 0, t: 0, cam: 0, best: myWeek().best.castle || 0, over: 0 };
+  const H = 8, BASE = 128;
+  const score = () => g.layers.length - 1 + g.perfect * 2;
+  const next = () => { const top = g.layers[g.layers.length - 1]; g.dir = g.layers.length % 2 ? 1 : -1; g.cur = { x: g.dir > 0 ? -Math.round(top.w / 2) : 160 - Math.round(top.w / 2), w: top.w }; g.speed = Math.min(140, 46 + g.layers.length * 4); };
+  const finish = () => {
+    endMini();
+    const sc = score(), e = capAward('castle', 14, Math.floor(sc / 3)), nb = recordScore('castle', sc);
+    say([`Your sandcastle is ${g.layers.length - 1} layers tall${g.perfect ? ` with ${g.perfect} perfect drops` : ''}!${nb ? ' NEW WEEKLY BEST!' : ''}`, e ? `+${e} shells.` : 'No shells left today, but your high score still counts!']);
+  };
+  return {
+    g,
+    hud: () => `SANDCASTLE<br>SCORE ${score()} BEST ${Math.max(g.best, score())}`,
+    update(dt) {
+      g.t += dt; if (g.flash > 0) g.flash -= dt;
+      for (const f of g.falls) { f.vy += 300 * dt; f.y += f.vy * dt; }
+      g.falls = g.falls.filter(f => f.y < 200);
+      const want = Math.max(0, (g.layers.length - 9) * H); g.cam += (want - g.cam) * Math.min(1, dt * 4);
+      if (g.state !== 'run' || !g.cur) return;
+      g.cur.x += g.dir * g.speed * dt;
+      if (g.cur.x > 160 - g.cur.w + 20 && g.dir > 0) g.dir = -1;
+      if (g.cur.x < -20 && g.dir < 0) g.dir = 1;
+    },
+    a() {
+      if (g.state === 'ready') { g.state = 'run'; next(); return; }
+      if (g.state === 'over') { if (!g.falls.length) finish(); return; }
+      if (g.state !== 'run') return;
+      const top = g.layers[g.layers.length - 1], c = g.cur, y = BASE - g.layers.length * H;
+      if (Math.abs(c.x - top.x) <= 2) { c.x = top.x; g.perfect++; g.combo++; g.flash = .5; sfx.play('catch');
+        if (g.combo >= 3 && c.w < 68) { c.w = Math.min(68, c.w + 4); c.x = Math.max(0, c.x - 2); } }
+      else {
+        g.combo = 0;
+        const l = Math.max(c.x, top.x), r = Math.min(c.x + c.w, top.x + top.w);
+        if (r - l <= 0) { g.falls.push({ x: c.x, w: c.w, y, vy: 0 }); g.cur = null; g.state = 'over'; sfx.play('bad'); return; }
+        if (c.x < l) g.falls.push({ x: c.x, w: l - c.x, y, vy: 0 }); if (c.x + c.w > r) g.falls.push({ x: r, w: c.x + c.w - r, y, vy: 0 });
+        c.x = l; c.w = r - l; sfx.play('text');
+      }
+      g.layers.push({ x: c.x, w: c.w }); next();
+    },
+    quit() { g.state = 'over'; finish(); },
+    render() {
+      px(ctx, 0, 0, 160, 144, '#a8d8f0'); px(ctx, 0, 70, 160, 20, '#2a7ab0'); px(ctx, 0, 70, 160, 2, '#f0f8fc');
+      const cam = Math.round(g.cam), sand = (x, y, w, top) => { px(ctx, x, y, w, H, '#a88858'); px(ctx, x, y, w, H - 1, '#e0c890'); px(ctx, x, y + 3, w, 1, '#d0b478');
+        if (top) for (let i = 0; i < w - 2; i += 6) px(ctx, x + i + 1, y - 3, 3, 3, '#e0c890'); };
+      px(ctx, 0, BASE + cam, 160, 40, '#e8d8a8'); for (let i = 0; i < 160; i += 12) px(ctx, i + (i % 24 ? 3 : 8), BASE + 6 + cam, 3, 1, '#c8b080');
+      g.layers.forEach((l, i) => { if (i) sand(Math.round(l.x), BASE - i * H + cam, Math.round(l.w), i === g.layers.length - 1 && g.state === 'over'); });
+      if (g.layers.length > 1) { const t = g.layers[g.layers.length - 1], ty = BASE - (g.layers.length - 1) * H + cam; for (let i = 6; i < 30 && g.layers.length > 4; i += 30) { px(ctx, Math.round(t.x + t.w / 2), ty - 12, 1, 12, '#5a4030'); px(ctx, Math.round(t.x + t.w / 2) + 1, ty - 12, 6, 4, '#d04848'); } }
+      for (let i = 4; i < g.layers.length; i += 4) { const l = g.layers[i]; px(ctx, Math.round(l.x + l.w / 2) - 2, BASE - i * H + cam + 2, 4, 5, '#7a5a38'); }   // little doors and windows
+      for (const f of g.falls) sand(Math.round(f.x), Math.round(f.y) + cam, Math.round(f.w));
+      if (g.cur) sand(Math.round(g.cur.x), BASE - g.layers.length * H + cam, Math.round(g.cur.w));
+      // a bucket and spade for scale
+      px(ctx, 140, BASE - 10 + cam, 12, 10, '#202020'); px(ctx, 141, BASE - 9 + cam, 10, 9, '#e04848'); px(ctx, 140, BASE - 12 + cam, 12, 2, '#202020');
+      if (g.flash > 0) txt(g.combo >= 3 ? 'PERFECT! WIDER!' : 'PERFECT!', 80, 22, '#d04848');
+      if (g.state === 'ready') { px(ctx, 14, 14, 132, 40, '#202020'); px(ctx, 16, 16, 128, 36, '#f8f8f0'); txt('SANDCASTLE STACK', 80, 20, '#202020'); txt('A: DROP THE SAND', 80, 32, '#202020'); txt('LINE IT UP EXACTLY!', 80, 42, '#d04848'); }
+      if (g.state === 'over' && !g.falls.length) { px(ctx, 24, 30, 112, 46, '#202020'); px(ctx, 26, 32, 108, 42, '#f8f8f0'); txt(`SCORE ${score()}`, 80, 38, '#202020'); txt(`BEST ${Math.max(g.best, score())}`, 80, 50, '#3a86b8'); txt('A: DONE', 80, 62, '#d04848'); }
+      else if (g.state === 'run') txt(String(score()), 80, 6, '#202020');
+    },
+  };
+}
+const startSurf = () => say(['BAY SURF: Ride the wave! UP and DOWN to move.', 'Press A at the very top for an air trick. Dodge kelp, rocks, and seals!'], () => startMini(baySurf()));
+const startCastle = () => say(['SANDCASTLE STACK: Drop each layer of sand right on top.', 'Line it up exactly for a PERFECT. Three in a row makes it wider!'], () => startMini(castleStack()));
+
 // ---------- Daily challenges ----------
 // Each day brings 2 real-life challenges (+10) and 1 game challenge (+3).
 const LIFE_REWARD = 10, PLAY_REWARD = 3;
@@ -2243,7 +2429,7 @@ function track(ev) {
 }
 // Points from minigames are capped per player per day so nobody can just grind.
 // Town activities pay out in shells (the game's own currency); real-life actions pay points.
-const SHELL_GAMES = new Set(['chapel', 'bell', 'cook', 'chowder', 'market', 'hunt', 'gull', 'run', 'danceparty', 'bake', 'quiet', 'tea', 'dogbeach', 'smores', 'arcade', 'fish', 'lullaby', 'walk', 'otter', 'journal', 'garden', 'hoops', 'pk', 'coop', 'tennis', 'pickle', 'pong', 'bowl', 'housework']);
+const SHELL_GAMES = new Set(['surf', 'castle', 'chapel', 'bell', 'cook', 'chowder', 'market', 'hunt', 'gull', 'run', 'danceparty', 'bake', 'quiet', 'tea', 'dogbeach', 'smores', 'arcade', 'fish', 'lullaby', 'walk', 'otter', 'journal', 'garden', 'hoops', 'pk', 'coop', 'tennis', 'pickle', 'pong', 'bowl', 'housework']);
 function capAward(game, cap, n) {
   const today = dateKey(new Date()), d = load('cap_' + game, { date: today, pts: [0, 0] });
   if (d.date !== today) { d.date = today; d.pts = [0, 0]; }
@@ -2276,6 +2462,8 @@ const DQ_POOL = [
   // games
   { id: 'gull', ev: 'play_gull', n: 1, kind: 'game', text: 'Play a round of Gull Glide' },
   { id: 'run', ev: 'play_run', n: 1, kind: 'game', text: 'Play a round of Moose Run' },
+  { id: 'surf', ev: 'play_surf', n: 1, kind: 'game', text: 'Go surfing with Lani on the beach' },
+  { id: 'castle', ev: 'play_castle', n: 1, kind: 'game', text: 'Build a sandcastle on the beach' },
   { id: 'fish', ev: 'play_fish', n: 1, kind: 'game', text: 'Go fishing at the fountain' },
   { id: 'hoops', ev: 'play_hoops', n: 1, kind: 'game', text: 'Shoot hoops at the court' },
   { id: 'arcade', ev: 'play_arcade', n: 1, kind: 'game', text: 'Play Midnight Snack at the arcade' },
@@ -2447,6 +2635,7 @@ function nearGrass(x0, y0) { for (let r = 0; r < 8; r++) for (let dy = -r; dy <=
 function DOOR_FRONT_RAW(x, y) { return BUILDINGS.some(b => b.door.x === x && b.door.y + 1 === y); }
 const SEASON_SPOT = nearGrass(21, 12), HAY_SPOT = nearGrass(23, 7);
 set(SEASON_SPOT.x, SEASON_SPOT.y, 'j');
+const BUCKET_SPOT = { x: 34, y: 36 }; set(BUCKET_SPOT.x, BUCKET_SPOT.y, 'q');   // a sand bucket on the beach: Sandcastle Stack
 
 // ---------- Lost & found: 3 different things go missing around town every day ----------
 const LOST_THINGS = [
@@ -2960,7 +3149,8 @@ const NPCS = [
   { name: 'KAI', x: 44, y: 16, r: 10, on: 'P', pal: { hair: '#202020', skin: SKIN[2], shirt: '#48c8a0', pants: '#303030' },
     lines: ['The rec trail goes all the way to Pacific Grove!', 'On your left! ...Oh, sorry. Hi!', 'Saw a whale spout off the coast this morning!'] },
   { name: 'LANI', x: 46, y: 27, r: 3, on: 'A', pal: { hair: '#f0d070', skin: SKIN[1], shirt: '#202838', pants: '#202838', long: true },
-    lines: ['Waves at Asilomar were firing this morning.', 'Wetsuit? Always. That water is COLD, dude.', 'Saw an otter steal a clam right off a kayak!'] },
+    lines: ['Waves at Asilomar were firing this morning.', 'Wetsuit? Always. That water is COLD, dude.', 'Saw an otter steal a clam right off a kayak!'],
+    then: () => choose([['GO SURFING WITH LANI!', startSurf], ['MAYBE LATER', () => {}]]) },
   { name: 'SAL', x: 55, y: 13, r: 2, on: 'R', pal: { hair: '#909098', skin: SKIN[1], shirt: '#e8d040', pants: '#3a4a6a' },
     lines: ['The squid boats go out tonight. Watch for the lights.', 'Those sea lions stole my bait. AGAIN.', 'Best chowder is right behind me. Try a sample!'] },
   { name: 'BRAD', x: 41, y: 11, r: 3, pal: { hair: '#c89048', skin: SKIN[0], shirt: '#f070a0', pants: '#e8d8b0' },
@@ -3004,7 +3194,7 @@ function talkTo(n, c) {
   n.dir = OPP[c.dir]; n.wait = 3;
   sfx.play('hi');
   const d = n.dyn && n.dyn();
-  say([`${n.name}: ${d && Math.random() < .6 ? d : pick(n.lines)}`]);
+  say([`${n.name}: ${d && Math.random() < .6 ? d : pick(n.lines)}`], n.then);
   const today = dateKey(new Date()), log = load('localslog', { date: today, by: [[], []] });
   if (log.date !== today) { log.date = today; log.by = [[], []]; }
   if (!log.by[active].includes(n.name)) { log.by[active].push(n.name); save('localslog'); track('locals'); }
@@ -4245,7 +4435,7 @@ function drawFireworks() {
 // A speech bubble over whoever just sent a chat message (when you're both in town)
 function drawBubble(text, sx, sy) {
   ctx.font = '8px "Press Start 2P", monospace';
-  const s = text.length > 16 ? text.slice(0, 15) + '…' : text, wd = Math.min(150, ctx.measureText(s).width + 8), x = Math.max(2, Math.min(SW - 2 - wd, sx + 8 - wd / 2)), y = Math.max(2, sy - 16);
+  const s = text.length > 16 ? text.slice(0, 15) + '…' : text, wd = Math.min(150, ctx.measureText(s).width + 8), x = Math.max(2, Math.min(SW - 2 - wd, sx + 8 - wd / 2)), y = Math.max(2, sy - 24);
   px(ctx, x - 1, y - 1, wd + 2, 13, '#202020'); px(ctx, x, y, wd, 11, '#f8f8f0'); px(ctx, sx + 7, y + 11, 3, 3, '#f8f8f0');
   ctx.fillStyle = '#202020'; ctx.textAlign = 'left'; ctx.textBaseline = 'top'; ctx.fillText(s, x + 4, y + 2);
 }
@@ -4370,6 +4560,7 @@ function render() {
   drawCoastLife(camX, camY, light);
   drawHappenings(camX, camY);
   drawSeason(camX, camY, light);
+  { const bx = BUCKET_SPOT.x * 16 - camX, by = BUCKET_SPOT.y * 16 - camY; if (bx > -20 && bx < SW + 20 && by > -20 && by < SH + 20) { px(ctx, bx + 3, by + 6, 10, 9, '#202020'); px(ctx, bx + 4, by + 7, 8, 7, '#e04848'); px(ctx, bx + 3, by + 4, 10, 2, '#202020'); px(ctx, bx + 12, by + 1, 2, 9, '#7a5030'); px(ctx, bx + 11, by, 4, 3, '#3870c8'); px(ctx, bx - 2, by + 11, 6, 4, '#e0c890'); } }
   drawReflections(camX, camY, light);
   // SK only shows up when you're close. She's hiding!
   const partnerAway = partnerLive() && !!live.peer.scene && live.peer.scene !== 'town';
@@ -4600,7 +4791,7 @@ function drawIcon(id, x, y) {
 function drawActing(e, sx, sy, frame) {
   const now = Date.now(), a = e.act && e.act.until > now && !e.moving ? e.act : null;
   if (!a) { if (e.act && e.moving) e.act = null; drawChar(e, sx, sy, frame); return; }
-  if (a.k === 'emote') { drawChar(e, sx, sy, frame); drawIcon(a.id, sx + 4, sy - 13 + Math.round(Math.sin((now - a.start) / 150) * 1)); return; }
+  if (a.k === 'emote') { drawChar(e, sx, sy, frame); drawIcon(a.id, sx + 4, sy - 21 + Math.round(Math.sin((now - a.start) / 150) * 1)); return; }
   const t = (now - a.start) / 1000, saved = e.dir, DIRS = ['down', 'left', 'up', 'right'];
   let dx = 0, dy = 0, f = 0, dir = 'down';
   switch (a.id) {
@@ -4934,9 +5125,9 @@ function followPartner(p) {
   if (p.game && p.waiting && !mini && GAMES[p.game] && live.waitBanner !== p.readyAt) { live.waitBanner = p.readyAt; const g = GAMES[p.game];
     if (appOpen) appToast(`${partnerName()} is waiting at ${g.place}!`); else gameBanner(`${nameOf(1 - active)} IS WAITING AT ${g.place.toUpperCase()}!`, () => warp(g.spot.x, g.spot.y, g.spot.dir)); }
   if (p.view !== 'town' || typeof p.x !== 'number') return;
-  o.scene = p.scene;
+  const prevScene = o.scene; o.scene = p.scene;
   if (o.x === p.x && o.y === p.y) { o.dir = p.dir || o.dir; return; }
-  if (Math.abs(o.x - p.x) + Math.abs(o.y - p.y) === 1) Object.assign(o, { fx: o.x, fy: o.y, x: p.x, y: p.y, t: 0, moving: true, step: o.step ^ 1, dir: p.dir || o.dir });
+  if (Math.abs(o.x - p.x) + Math.abs(o.y - p.y) <= 3 && prevScene === p.scene) Object.assign(o, { fx: o.x, fy: o.y, x: p.x, y: p.y, t: 0, moving: true, step: o.step ^ 1, dir: p.dir || o.dir });
   else Object.assign(o, { x: p.x, y: p.y, fx: p.x, fy: p.y, t: 1, moving: false, dir: p.dir || o.dir });
 }
 function roomSay(text) { live.bubbleMine = { text: text.slice(0, 40), until: Date.now() + 6000 }; pushPresence(); }
@@ -4946,8 +5137,8 @@ const avatarCache = {};
 function avatarURL(i) {
   const p = chars[i].pal, key = JSON.stringify(p);
   if (avatarCache[key]) return avatarCache[key];
-  const c = document.createElement('canvas'); c.width = 16; c.height = 14;
-  drawCharTo(c.getContext('2d'), { pal: p, dir: 'down', moving: false }, 0, 3, 0);
+  const c = document.createElement('canvas'); c.width = 16; c.height = 18;
+  drawCharTo(c.getContext('2d'), { pal: p, dir: 'down', moving: false }, 0, 10, 0);
   return (avatarCache[key] = c.toDataURL());
 }
 
@@ -5500,15 +5691,15 @@ function wardrobeScreen() {
       <section class="card"><div class="card-h"><span class="eyebrow">Pants</span></div><div class="swatches">${PANTS.map(c => sw('look', 'pants', c, lk.pants === c)).join('')}</div></section>`;
   }
   return `<section class="card ward-top"><div class="seg">${tabs.map(([k, l]) => `<button class="chip ${who === k ? 'on' : ''}" data-act="wardwho" data-who="${k}">${esc(l)}</button>`).join('')}</div>
-      <canvas id="wardPreview" width="60" height="22" aria-label="Character preview"></canvas>
+      <canvas id="wardPreview" width="60" height="30" aria-label="Character preview"></canvas>
       <p class="muted2" style="margin:0; text-align:center">Front, side, and back. Changes show up in town right away.</p></section>${body}`;
 }
 function drawWardPreview() {
   const cv = $('wardPreview'); if (!cv) return;
   const g = cv.getContext('2d'); g.clearRect(0, 0, cv.width, cv.height);
-  g.fillStyle = '#8cc878'; g.fillRect(0, 16, cv.width, 6);
+  g.fillStyle = '#8cc878'; g.fillRect(0, 24, cv.width, 6);
   const L = looks(), slot = wardWho === 'partner' ? 1 - active : active, pal = lookToPal(L['p' + slot]);
-  ['down', 'right', 'up'].forEach((dir, i) => drawCharTo(g, { pal, dir, moving: false, holdingMargo: wardWho === 'margo' }, 2 + i * 19, 4, 0));
+  ['down', 'right', 'up'].forEach((dir, i) => drawCharTo(g, { pal, dir, moving: false, holdingMargo: wardWho === 'margo' }, 2 + i * 19, 12, 0));
 }
 function setLook(k, v) {
   const L = looks(), key = wardWho === 'margo' ? 'margo' : 'p' + (wardWho === 'me' ? active : 1 - active);
