@@ -41,6 +41,7 @@
   /* Controls */
   #pad { width:min(100%, 420px); display:grid; grid-template-columns:auto 1fr auto; align-items:center; padding:0 max(12px, env(safe-area-inset-left)); touch-action:none; }
   #pad button { touch-action:none; font-family:inherit; cursor:pointer; }
+  #pad, #pad *, #screen, #screen * { -webkit-user-select:none; user-select:none; -webkit-touch-callout:none; }
   .dpad { display:grid; grid-template-columns:repeat(3, min(44px, 12vw)); grid-template-rows:repeat(3, min(44px, 12vw)); }
   .dpad button { background:#34344a; border:none; color:#9090a8; font-size:14px; padding:0; }
   .dpad button:active { background:#4a4a66; }
@@ -208,6 +209,10 @@
   .town-card .eyebrow { color:#9fb4c8; }
   .town-card li { margin:4px 0; }
   .town-card ul { padding-left:18px; margin:6px 0 14px; }
+  .gear-btn { flex:none; width:42px; height:42px; border-radius:14px; border:1px solid var(--a-line); background:var(--a-card); color:var(--a-soft); display:grid; place-items:center; cursor:pointer; margin-left:auto; margin-right:8px; }
+  .ava-wrap { position:relative; display:inline-block; flex:none; line-height:0; }
+  .ava-wrap .face { position:absolute; right:-4px; bottom:-4px; width:52%; height:52%; border-radius:50%; object-fit:cover; border:2px solid var(--a-card); box-shadow:0 1px 3px rgba(0,0,0,.25); }
+  .face-big { width:96px; height:96px; border-radius:50%; object-fit:cover; border:3px solid var(--a-card); box-shadow:0 2px 8px rgba(0,0,0,.15); }
   .town-card .town-btn { width:100%; justify-content:center; font-size:17px; padding:14px; }
   .tabs { display:flex; justify-content:space-around; background:var(--a-card); border-top:1px solid var(--a-line); padding:6px max(8px, env(safe-area-inset-right)) calc(6px + env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left)); }
   .tabs button { flex:1; max-width:110px; background:none; border:none; font:inherit; font-size:12px; font-weight:700; color:var(--a-soft); display:flex; flex-direction:column; align-items:center; gap:2px; padding:6px 0; cursor:pointer; position:relative; }
@@ -247,6 +252,15 @@
   .pcell.take .plus { font-size:28px; line-height:1; }
   .jday { padding:12px 0; border-top:1px solid var(--a-line); }
   .jday:first-of-type { border-top:none; }
+  .recap-hero { background:linear-gradient(160deg, var(--a-sand), var(--a-card) 70%); border:1px solid var(--a-gold); text-align:center; }
+  .recap-crown { display:flex; justify-content:center; gap:8px; margin:12px 0 4px; position:relative; }
+  .award { display:flex; gap:12px; align-items:center; padding:10px 0; border-top:1px solid var(--a-line); }
+  .award:first-of-type { border-top:none; }
+  .award-both { display:inline-flex; gap:2px; flex:none; }
+  .recap-list { margin:0; padding-left:20px; line-height:1.8; }
+  .recap-pics { display:grid; grid-template-columns:repeat(3, 1fr); gap:6px; }
+  .recap-pics img { width:100%; aspect-ratio:1; object-fit:cover; border-radius:10px; }
+  .focus-card { border-left:4px solid var(--a-kelp); }
   .esv-sheet { max-height:88vh; display:flex; flex-direction:column; }
   .esv-text { overflow-y:auto; font-family:Georgia, 'Times New Roman', serif; font-size:18px; line-height:1.65; padding:4px 2px 20px; user-select:text; -webkit-user-select:text; }
   .esv-text h2, .esv-text h3 { font-family:Nunito, sans-serif; font-size:15px; text-transform:uppercase; letter-spacing:.04em; color:var(--a-soft); margin:18px 0 6px; }
@@ -407,6 +421,7 @@
       <h1 id="aHello">Good morning</h1>
       <div class="sub"><span id="aDate"></span><span id="aSync"><span class="sync-dot"></span> Saved on this phone</span></div>
     </div>
+    <button class="gear-btn" id="toSettings" aria-label="Settings"><svg viewBox="0 0 16 16" width="20" height="20" shape-rendering="crispEdges" aria-hidden="true"><path fill="currentColor" fill-rule="evenodd" d="M7 1h2v2h2v2h2v2h2v2h-2v2h-2v2H9v2H7v-2H5v-2H3V9H1V7h2V5h2V3h2zM7 6h2v1h1v2H9v1H7V9H6V7h1z"/></svg></button>
     <button class="town-btn" id="toTown" aria-label="Enter Family Town"><svg viewBox="0 0 16 16" width="18" height="18" shape-rendering="crispEdges" aria-hidden="true"><path fill="currentColor" fill-rule="evenodd" d="M7 2h2v2H7zM5 4h6v2H5zM3 6h10v2H3zM4 8h8v6H4zM7 10h2v4H7z"/></svg>Town</button>
   </header>
   <main id="appMain"></main>
@@ -441,14 +456,15 @@
 
 <script>
 const $ = id => document.getElementById(id);
-const TILE = 16, VW = 10, VH = 9, MW = 60, MH = 66;
+const TILE = 16, MW = 60, MH = 66;
+let VW = 10, VH = 9, SW = 160, SH = 144;   // the town view grows to fill the phone (see resize)
 const canvas = $('game');
 let ctx = canvas.getContext('2d');   // swapped briefly when drawing characters into other canvases
 canvas.width = VW * TILE; canvas.height = VH * TILE;
 
 // Saved data is kept on this phone, and shared live with the family through the
 // artifact's database when it's available. Each key is one document: kv/<key> = { v: value }.
-const LOCAL_ONLY = new Set(['seen', 'sound', 'notesSeen', 'crowned', 'me', 'tab', 'bibleSeen', 'lastEnc', 'ciAsked']);
+const LOCAL_ONLY = new Set(['recapSeen', 'introSeen', 'seen', 'sound', 'notesSeen', 'crowned', 'me', 'tab', 'bibleSeen', 'lastEnc', 'ciAsked']);
 const sync = { db: null, ready: false, userId: null, status: 'local', dirty: new Set(), busy: new Set(), timers: {}, vals: {}, pendingRefresh: false };
 const store = {
   get(k, d) { try { const v = localStorage.getItem('ft_' + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -557,8 +573,11 @@ document.addEventListener('focusout', () => setTimeout(() => { if (sync.pendingR
 function identify() {
   const players = load('players', { ids: [null, null] });
   const slot = sync.userId ? players.ids.indexOf(sync.userId) : -1;
-  if (slot >= 0) { active = slot; store.set('me', slot); updateHud(); renderApp(); }
-  else if (sync.userId && sync.status !== 'readonly') showNames();
+  if (slot >= 0) { active = slot; store.set('me', slot); updateHud(); renderApp(); return; }
+  if (!sync.userId || sync.status === 'readonly') return;
+  const open = [0, 1].filter(i => !players.ids[i]);
+  if (open.length === 1) { claimSlot(open[0]); updateHud(); renderApp(); appToast(`Welcome, ${titleCase(nameOf(open[0]))}!`); return; }
+  sheet = { kind: 'whoami' }; renderSheet();   // first time on this account: one tap, then never again
 }
 function claimSlot(slot) {
   active = slot; store.set('me', slot);
@@ -665,6 +684,7 @@ const BUILDINGS = [
   { id: 'wharf',   name: 'CHOWDER SHACK', x: 50, y: 9, w: 4, h: 3, roof: '#d06030', coast: true, sign: 'CHOWDER SHACK: Plan family outings. Free chowder samples!' },
   { id: 'galley',  name: 'THE GALLEY',  x: 31, y: 4,  w: 5, h: 4, roof: '#3a7a5a', sign: "THE GALLEY: Plan the week's dinners. Calamari is always on." },
   { id: 'rec',     name: 'REC CENTER',  x: 39, y: 14, w: 4, h: 3, roof: '#e0a030', coast: true, sign: 'REC CENTER: Tennis, pickleball, ping pong, and bowling. Alone or together!' },
+  { id: 'shop',    name: 'SHELL SHOP',  x: 37, y: 4,  w: 5, h: 4, roof: '#d0679a', sign: 'SHELL SHOP: Shirts, hats, and dance moves. Pay with the shells you win in games!' },
   { id: 'custom',  name: 'CUSTOM HOUSE', x: 33, y: 13, w: 6, h: 3, roof: '#b85838', adobe: true, sign: "CUSTOM HOUSE: California's oldest government building. And your family's story." },
   // Carmel-by-the-Sea
   { id: 'bakery',   name: 'CARMEL BAKERY', x: 5,  y: 42, w: 5, h: 3, roof: '#b86a3a', carmel: true, sign: 'CARMEL BAKERY: Sourdough baked fresh every morning.' },
@@ -1156,7 +1176,8 @@ function drawCrown(sx, sy) {
 function drawCharTo(g, c, x, y, frame) { const saved = ctx; ctx = g; try { drawChar(c, x, y, frame || 0); } finally { ctx = saved; } }
 
 // ---------- Game state ----------
-let names = store.get('names', null);
+const DEFAULT_NAMES = ['MICHAEL', 'MOLLIE'];
+let names = store.get('names', null) || DEFAULT_NAMES;   // no more typing names: each account is tied to its player
 let margoWith = store.get('margo', 0);
 let mode = 'walk';            // walk | dialog | menu | panel | names | arcade
 let running = false;
@@ -1168,7 +1189,7 @@ const pick = a => a[Math.floor(Math.random() * a.length)];
 
 // ---------- Weekly points (weeks run Monday to Sunday) ----------
 const dateKey = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-const weekKey = () => { const d = new Date(); d.setDate(d.getDate() - (d.getDay() + 6) % 7); return dateKey(d); };
+const weekKey = () => { const d = new Date(Date.now() + 6 * 3600e3); d.setDate(d.getDate() - (d.getDay() + 6) % 7); return dateKey(d); };
 // Each person's weekly points live in their own record (pts0, pts1), so you can both
 // score at the same moment without one overwriting the other. 'score' holds the week and last result.
 function readScore() {
@@ -1191,9 +1212,10 @@ function crownWeeks() {
 }
 function checkWeek() {
   if (score.week === weekKey()) return;
-  const [a, b] = score.pts, winner = a > b ? 0 : b > a ? 1 : -1, holder = winner >= 0 ? winner : score.holder;
+  const hb = hiBonus(score.week), a = score.pts[0] + hb.pts[0], b = score.pts[1] + hb.pts[1];   // weekly high scores count toward the crown
+  const winner = a > b ? 0 : b > a ? 1 : -1, holder = winner >= 0 ? winner : score.holder;
   const hist = load('history', []);
-  if (!hist.some(h => h.week === score.week)) { hist.push({ week: score.week, pts: [a, b], winner, holder }); save('history'); }
+  if (!hist.some(h => h.week === score.week)) { hist.push({ week: score.week, pts: [a, b], winner, holder, hi: hb.pts }); save('history'); }
   if (winner >= 0) oweDeal(score.week, 1 - winner, winner);
   score = { week: weekKey(), pts: [0, 0], last: { pts: [a, b], winner }, holder };
   saveScore(); saveScore(0); saveScore(1);
@@ -1317,6 +1339,7 @@ const BUILDING_APP = { chapel: ['bible'], market: ['lists', 'groceries'], galley
 function enterBuilding(b) {
   if (b.id === 'home') { enterHouse(); return; }
   if (b.id === 'rec') { sfx.play('door'); recMenu(); return; }
+  if (b.id === 'shop') { sfx.play('door'); say(['Welcome to the SHELL SHOP!', `You have ${shells(active)} shells. Shirts, hats, Margo outfits, and dance moves inside!`], () => showApp('us', 'wardrobe')); return; }
   if (CARMEL_ENTER[b.id]) { sfx.play('door'); CARMEL_ENTER[b.id](b); return; }
   if (BUILDING_APP[b.id]) { sfx.play('door'); showApp(...BUILDING_APP[b.id]); return; }
   openPanel(b.id);
@@ -1376,15 +1399,17 @@ function advanceDialog() {
 $('dialog').addEventListener('click', () => { if (mode === 'dialog') advanceDialog(); });
 
 // ---------- START menu (fast travel) ----------
-const MAIN_MENU = [['BACK TO APP', 'app'], ['MISSIONS', 'missions'], ['EMOTE', '@emote'], ['DANCE', '@dance'], ['MESSAGES', 'chat'], ['SCOREBOARD', 'scores'], ['CHALLENGES', 'daily'], ['GAMES', '@games'], ['TRAVEL', '@travel'], ['SWAP PLAYER', 'swap'], ['OPTIONS', '@options'], ['CLOSE', 'close']];
+const MAIN_MENU = [['MISSIONS', 'missions'], ['PLAY', '@play'], ['SAY HI', '@social'], ['SHOP & CLOSET', 'wardrobe'], ['TRAVEL', '@travel'], ['MORE', '@more'], ['CLOSE', 'close']];
 const SUB_MENUS = {
-  '@games': [['BASKETBALL', 'hoops'], ['SOCCER', 'pk'], ['ARCADE', 'arcade'], ['FISHING', 'fish'], ['LULLABY', 'lullaby'], ['DOG WALK', 'dogwalk'], ['BACK', '@main']],
-  '@travel': [['HOME', 'home'], ['CHAPEL', 'chapel'], ['CLOCK TOWER', 'clock'], ['MARKET', 'market'], ['REC CENTER', 'go:rec'], ['CARMEL', 'go:carmel'], ['BIG SUR', 'go:bigsur'], ['BACK', '@main']],
-  '@options': [['SOUND FX', 'fx'], ['MUSIC', 'music'], ['NAMES', 'names'], ['BACK', '@main']],
+  '@play': [['GULL GLIDE', 'arc:gull'], ['MOOSE RUN', 'arc:run'], ['BASKETBALL', 'hoops'], ['SOCCER', 'pk'], ['REC CENTER', 'go:rec'], ['MIDNIGHT SNACK', 'arcade'], ['FISHING', 'fish'], ['LULLABY', 'lullaby'], ['DOG WALK', 'dogwalk'], ['HIGH SCORES', 'hiscores'], ['BACK', '@main']],
+  '@social': [['EMOTE', '@emote'], ['DANCE', '@dance'], ['MESSAGES', 'chat'], ['BACK', '@main']],
+  '@more': [['SCOREBOARD', 'scores'], ['CHALLENGES', 'daily'], ['SOUND & MUSIC', '@options'], ['SWAP PLAYER', 'swap'], ['BACK TO APP', 'app'], ['BACK', '@main']],
+  '@travel': [['HOME', 'home'], ['SHELL SHOP', 'go:shop'], ['CHAPEL', 'chapel'], ['MARKET', 'market'], ['REC CENTER', 'go:rec'], ['CARMEL', 'go:carmel'], ['BIG SUR', 'go:bigsur'], ['BACK', '@main']],
+  '@options': [['SOUND FX', 'fx'], ['MUSIC', 'music'], ['BACK', '@more']],
   '@main': MAIN_MENU,
 };
 Object.defineProperty(SUB_MENUS, '@dance', { get: () => danceMenu() });
-Object.defineProperty(SUB_MENUS, '@emote', { get: () => [...EMOTES.map(([id, l]) => [l, 'emote:' + id]), ['BACK', '@main']] });
+Object.defineProperty(SUB_MENUS, '@emote', { get: () => [...EMOTES.map(([id, l]) => [l, 'emote:' + id]), ['BACK', '@social']] });
 const menuLabel = ([label, id]) => id === 'fx' || id === 'music' ? `${label} ${sfx.prefs()[id] ? 'ON' : 'OFF'}` : label;
 let MENU = MAIN_MENU;
 let menuI = 0;
@@ -1403,8 +1428,12 @@ function chooseMenu(i) {
   if (id.startsWith('dance:')) { startAct('dance', id.slice(6)); return; }
   if (id === 'dshop') { showApp('us', 'wardrobe'); return; }
   if (id === 'missions') { missionsMenu(); return; }
+  if (id === 'arc:gull') { say(['GULL GLIDE: Tap A to flap between the pier posts.', 'Grab sea shells for bonus points. It gets faster!'], () => startMini(gullGlide())); return; }
+  if (id === 'arc:run') { say(['MOOSE RUN: Moose is loose on the rec trail!', 'A to jump (tap twice to double jump), DOWN to duck under gulls.'], () => startMini(mooseRun())); return; }
+  if (id === 'hiscores') { say(hiScoresText()); return; }
   if (id.startsWith('go:')) { const where = id.slice(3);
     if (where === 'rec') { warp(REC_SPOT.x, REC_SPOT.y, 'up'); return; }
+    if (where === 'shop') { const b = BUILDINGS.find(x => x.id === 'shop'); warp(b.door.x, b.door.y + 1, 'up'); return; }
     if (!hasUnlock(where)) { const r = ROAD.find(x => x.id === where); say([`${r.name.replace('New area: ', '')} opens at ${r.at} team points. ${r.at - allTimeTeam()} to go!`]); return; }
     if (where === 'carmel') warp(15, 47, 'down'); else warp(21, 59, 'down'); return; }
   if (id.startsWith('pick:')) { const fn = CHOICES[+id.slice(5)]; if (fn) fn(); return; }
@@ -1892,6 +1921,8 @@ function hold(el, down, up) {
   el.addEventListener('pointerdown', e => { e.preventDefault(); el.setPointerCapture(e.pointerId); down(); });
   if (up) for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) el.addEventListener(ev, up);
 }
+// iOS shows a magnifying loupe on long presses unless touches on the controls are claimed
+for (const el of [$('pad'), $('game')]) if (el) el.addEventListener('touchstart', e => { if (e.cancelable) e.preventDefault(); }, { passive: false });
 document.querySelectorAll('[data-dir]').forEach(el => hold(el, () => dirDown(el.dataset.dir), () => dirUp(el.dataset.dir)));
 hold($('btnA'), pressA);
 hold($('btnB'), () => { running = true; pressB(); }, () => { running = false; });
@@ -1899,8 +1930,14 @@ hold($('btnStart'), pressStart);
 hold($('btnSwap'), () => showApp());
 
 function resize() {
-  const s = Math.max(1, Math.min(Math.floor((innerWidth - 8) / 160), Math.floor((innerHeight - 230) / 144)));
-  document.documentElement.style.setProperty('--s', s);
+  const availW = Math.min(innerWidth - 16, 600), availH = innerHeight - 210;
+  VW = Math.max(10, Math.min(14, Math.round(availW / 32)));
+  const s = Math.min(4, availW / (VW * 16));
+  VH = Math.max(9, Math.min(20, Math.floor(availH / (16 * s))));
+  SW = VW * 16; SH = VH * 16;
+  canvas.width = SW; canvas.height = SH; ctx.imageSmoothingEnabled = false;
+  const scr = $('screen'); scr.style.width = Math.round(SW * s) + 'px'; scr.style.height = Math.round(SH * s) + 'px';
+  document.documentElement.style.setProperty('--s', Math.max(1.6, Math.min(3, s)).toFixed(2));
 }
 addEventListener('resize', resize);
 resize();
@@ -1910,7 +1947,7 @@ const ARCADE_DAILY_MAX = 10;
 let arc = null;
 function startArcade() {
   mode = 'arcade'; heldDirs.length = 0;
-  arc = { time: 30, x: 72, items: [], score: 0, spawn: .5, step: 0, walkT: 0 };
+  arc = { time: 30, x: 72, items: [], score: 0, spawn: .36, step: 0, walkT: 0 };
   updateHud();
 }
 function endArcade(quit) {
@@ -1918,6 +1955,7 @@ function endArcade(quit) {
   arc = null; mode = 'walk'; heldDirs.length = 0;
   if (quit) { updateHud(); say(['You left the arcade. No points this round.']); return; }
   if (s >= 10) track('arcade10');
+  recordScore('arcade', s);
   const earned = capAward('arcade', ARCADE_DAILY_MAX, s);
   updateHud();
   say([`TIME'S UP! You caught ${s} points of snacks.`,
@@ -1962,6 +2000,159 @@ function renderArcade() {
   const c = chars[active], frame = arc.walkT ? 1 + (Math.floor(arc.walkT * 8) % 2) : 0;
   drawChar({ ...c, dir: arc.walkT ? arc.dir : 'down' }, Math.round(arc.x), 112, frame);
   if (arc.flash) px(ctx, Math.round(arc.x) + 6, 104, 4, 4, arc.flash.kind === 'diaper' ? '#98d040' : '#f8f8f8');
+}
+
+// ---------- Weekly stats: high scores, days in the app, and the Sunday awards ----------
+// Each of you writes only your own key (wk0 / wk1), so two phones never overwrite each other.
+const HI_GAMES = { gull: 'Gull Glide', run: 'Moose Run', hoops: 'Basketball', arcade: 'Midnight Snack', tennis: 'Tennis', pong: 'Ping Pong', pickle: 'Pickleball', bowl: 'Bowling', fish: 'Fishing', pk: 'Soccer' };
+const HI_PTS = 10;   // real points for the week's top score in each game
+function myWeek() {
+  const k = 'wk' + active, w = load(k, null) || { week: weekKey(), best: {}, days: [] };
+  if (w.week !== weekKey()) { w.prev = { week: w.week, best: w.best, days: w.days }; w.week = weekKey(); w.best = {}; w.days = []; }
+  mem[k] = w; return w;
+}
+function weekStats(i, week) {
+  const w = memOr('wk' + i, null);
+  if (!w) return { best: {}, days: [] };
+  return w.week === week ? w : w.prev && w.prev.week === week ? w.prev : { best: {}, days: [] };
+}
+function recordScore(game, n) {
+  const w = myWeek(), old = w.best[game] || 0;
+  if (n <= old) return false;
+  w.best[game] = n; save('wk' + active); return true;
+}
+function markDay() { const w = myWeek(), d = dateKey(new Date()); if (!w.days.includes(d)) { w.days.push(d); save('wk' + active); } }
+function hiBonus(week) {
+  const a = weekStats(0, week).best, b = weekStats(1, week).best, out = [0, 0], wins = [];
+  for (const g of Object.keys(HI_GAMES)) {
+    const x = a[g] || 0, y = b[g] || 0; if (!x && !y) continue;
+    if (x > y) { out[0] += HI_PTS; wins.push([g, 0, x, y]); } else if (y > x) { out[1] += HI_PTS; wins.push([g, 1, y, x]); } else { out[0] += HI_PTS / 2; out[1] += HI_PTS / 2; wins.push([g, -1, x, y]); }
+  }
+  return { pts: out, wins };
+}
+function hiScoresText() {
+  const w = weekKey(), a = weekStats(0, w).best, b = weekStats(1, w).best, rows = Object.keys(HI_GAMES).filter(g => a[g] || b[g]);
+  if (!rows.length) return ['No high scores yet this week. Play anything in PLAY to set one!', `Top score in each game wins ${HI_PTS} real points on Sunday.`];
+  return [`THIS WEEK'S HIGH SCORES (top score in each game = +${HI_PTS} PTS on Sunday)`, ...rows.map(g => `${HI_GAMES[g].toUpperCase()}: ${nameOf(0)} ${a[g] || 0}, ${nameOf(1)} ${b[g] || 0}`)];
+}
+
+// ---------- Gull Glide: tap to flap through the pier posts ----------
+function gullGlide() {
+  const g = { y: 60, vy: 0, posts: [], t: 0, spawn: 0, score: 0, state: 'ready', dead: 0, speed: 52, pickups: [], best: myWeek().best.gull || 0, flap: 0 };
+  const GAP0 = 50, W = 14;
+  const finish = () => {
+    endMini();
+    const e = capAward('gull', 20, Math.floor(g.score / 2));
+    const nb = recordScore('gull', g.score); track('arcadeplay');
+    say([`You glided past ${g.score} pier post${g.score === 1 ? '' : 's'}!${nb ? ' NEW WEEKLY BEST!' : ''}`, e ? `+${e} shells.` : 'No shells left today, but your high score still counts!']);
+  };
+  const crash = () => { if (g.state !== 'fly') return; g.state = 'dead'; g.dead = 0; sfx.play('bad'); };
+  return {
+    hud: () => `GULL GLIDE<br>SCORE ${g.score} BEST ${Math.max(g.best, g.score)}`,
+    update(dt) {
+      g.t += dt; g.flap = Math.max(0, g.flap - dt);
+      if (g.state === 'ready') { g.y = 60 + Math.sin(g.t * 3) * 4; return; }
+      if (g.state === 'dead') { g.dead += dt; g.vy += 300 * dt; g.y = Math.min(124, g.y + g.vy * dt); if (g.dead > 1.4) g.state = 'over'; return; }
+      if (g.state === 'over') return;
+      g.vy += 330 * dt; g.y += g.vy * dt;
+      g.speed = 52 + Math.min(48, g.score * 1.6);
+      const gap = Math.max(34, GAP0 - g.score * .7);
+      if ((g.spawn -= dt) <= 0) { g.spawn = 92 / g.speed + .55; const top = 14 + Math.random() * (100 - gap); g.posts.push({ x: 164, top, gap, passed: false, wob: g.score > 12 ? (Math.random() * 2 - 1) * 10 : 0 });
+        if (Math.random() < .35) g.pickups.push({ x: 164 + 46, y: 20 + Math.random() * 90 }); }
+      for (const p of g.posts) { p.x -= g.speed * dt; if (p.wob) p.top += Math.sin(g.t * 2 + p.x / 20) * p.wob * dt;
+        if (!p.passed && p.x + W < 40) { p.passed = true; g.score++; sfx.play('blip'); }
+        if (p.x < 48 && p.x + W > 36 && (g.y < p.top || g.y + 8 > p.top + p.gap)) crash(); }
+      for (const k of g.pickups) { k.x -= g.speed * dt; if (!k.got && Math.abs(k.x - 42) < 8 && Math.abs(k.y - g.y - 4) < 8) { k.got = true; g.score += 2; sfx.play('coin'); } }
+      g.posts = g.posts.filter(p => p.x > -20); g.pickups = g.pickups.filter(k => k.x > -10 && !k.got);
+      if (g.y < 0 || g.y > 118) crash();
+    },
+    a() {
+      if (g.state === 'ready') { g.state = 'fly'; g.vy = -110; return; }
+      if (g.state === 'fly') { g.vy = -112; g.flap = .15; sfx.play('text'); return; }
+      if (g.state === 'over') finish();
+    },
+    quit() { if (g.state === 'fly' || g.state === 'ready') { g.state = 'over'; } finish(); },
+    render() {
+      px(ctx, 0, 0, 160, 144, '#88b8e0');
+      for (let i = 0; i < 6; i++) px(ctx, 0, i * 16, 160, 16, ['#f8c890', '#f8b880', '#f0a878', '#c8a0b8', '#98a8d0', '#88b8e0'][i]);
+      const off = (g.t * g.speed * .2) % 160;
+      for (let k = 0; k < 2; k++) { const hx = -off + k * 160; px(ctx, hx, 92, 160, 10, '#6a7a98'); px(ctx, hx + 20, 86, 40, 8, '#6a7a98'); px(ctx, hx + 90, 84, 50, 10, '#5a6a88'); }
+      px(ctx, 0, 118, 160, 26, '#2f6f9f'); for (let i = 0; i < 10; i++) px(ctx, ((i * 37 - g.t * g.speed) % 170 + 170) % 170 - 5, 122 + (i % 3) * 6, 8, 1, '#8fc8f0');
+      for (const p of g.posts) { const x = Math.round(p.x), t = Math.round(p.top), b = Math.round(p.top + p.gap);
+        px(ctx, x - 1, 0, W + 2, t + 1, '#202020'); px(ctx, x, 0, W, t, '#8a5a32'); px(ctx, x + 2, 0, 2, t, '#a87a4a'); px(ctx, x - 3, t - 5, W + 6, 5, '#5e3b1e');
+        px(ctx, x - 1, b - 1, W + 2, 144 - b, '#202020'); px(ctx, x, b, W, 144 - b, '#8a5a32'); px(ctx, x + 2, b, 2, 144 - b, '#a87a4a'); px(ctx, x - 3, b, W + 6, 5, '#5e3b1e'); }
+      for (const k of g.pickups) { const x = Math.round(k.x), y = Math.round(k.y); px(ctx, x - 3, y - 2, 7, 5, '#202020'); px(ctx, x - 2, y - 1, 5, 3, '#f8d0c0'); px(ctx, x, y - 2, 1, 1, '#f8f0e8'); }
+      const y = Math.round(g.y), wing = g.flap > 0 || Math.floor(g.t * 8) % 2 ? -3 : 2;
+      px(ctx, 36, y + 2, 12, 6, '#202020'); px(ctx, 37, y + 3, 10, 4, '#f8f8f8'); px(ctx, 46, y + 3, 3, 2, '#f0a020'); px(ctx, 44, y + 3, 1, 1, '#202020');
+      px(ctx, 38, y + 3 + wing, 7, 2, '#a8b0b8'); px(ctx, 34, y + 4, 3, 2, '#505058');
+      if (g.state === 'ready') { txt('GULL GLIDE', 80, 24, '#f8f8f8'); txt('TAP A TO FLAP', 80, 96, '#f8f8f8'); }
+      if (g.state === 'over') { px(ctx, 24, 44, 112, 46, '#202020'); px(ctx, 26, 46, 108, 42, '#f8f8f0'); txt(`SCORE ${g.score}`, 80, 52, '#202020'); txt(`BEST ${Math.max(g.best, g.score)}`, 80, 64, '#3a86b8'); txt('A: DONE', 80, 76, '#d04848'); }
+      else if (g.state !== 'ready') txt(String(g.score), 80, 6, '#f8f8f8');
+    },
+  };
+}
+
+// ---------- Moose Run: jump and duck down the rec trail ----------
+function mooseRun() {
+  const g = { y: 0, vy: 0, jumps: 0, duck: 0, obs: [], shells: [], t: 0, spawn: 1.2, dist: 0, bonus: 0, state: 'ready', speed: 70, dead: 0, best: myWeek().best.run || 0 };
+  const GROUND = 112;
+  const score = () => Math.floor(g.dist / 10) + g.bonus;
+  const finish = () => {
+    endMini();
+    const sc = score(), e = capAward('run', 20, Math.floor(sc / 20)), nb = recordScore('run', sc); track('arcadeplay');
+    say([`Moose ran ${Math.floor(g.dist / 10)} meters and grabbed ${g.bonus / 5} shells on the way!${nb ? ' NEW WEEKLY BEST!' : ''}`, e ? `+${e} shells.` : 'No shells left today, but your high score still counts!']);
+  };
+  const KINDS = [{ k: 'cone', w: 8, h: 10, high: false }, { k: 'crab', w: 12, h: 7, high: false }, { k: 'bench', w: 18, h: 10, high: false }, { k: 'gull', w: 12, h: 6, high: true }];
+  return {
+    hud: () => `MOOSE RUN<br>SCORE ${score()} BEST ${Math.max(g.best, score())}`,
+    update(dt) {
+      g.t += dt;
+      if (g.state !== 'run') { if (g.state === 'dead' && (g.dead += dt) > 1.2) g.state = 'over'; return; }
+      g.speed = 70 + Math.min(90, g.dist / 60);
+      g.dist += g.speed * dt; g.duck = Math.max(0, g.duck - dt);
+      if (g.y < 0 || g.vy < 0) { g.vy += 420 * dt; g.y = Math.min(0, g.y + g.vy * dt); if (g.y === 0) { g.vy = 0; g.jumps = 0; } }
+      if ((g.spawn -= dt) <= 0) {
+        const pool = g.dist > 600 ? KINDS : KINDS.slice(0, 3), o = pool[Math.floor(Math.random() * pool.length)];
+        g.obs.push({ ...o, x: 166 }); if (g.dist > 1500 && Math.random() < .25) g.obs.push({ ...KINDS[0], x: 166 + 22 });
+        g.spawn = Math.max(.55, 1.3 - g.dist / 4000) + Math.random() * .6;
+        if (Math.random() < .5) g.shells.push({ x: 166 + 40 + Math.random() * 30, y: GROUND - 18 - Math.random() * 30 });
+      }
+      const mx = 24, mw = 20, mh = g.duck > 0 && g.y === 0 ? 8 : 14, my = GROUND + g.y - mh;
+      for (const o of g.obs) { o.x -= g.speed * dt;
+        const oy = o.high ? GROUND - 20 : GROUND - o.h;
+        if (o.x < mx + mw - 3 && o.x + o.w > mx + 3 && my < oy + o.h && my + mh > oy) { g.state = 'dead'; g.dead = 0; sfx.play('bark'); } }
+      for (const s of g.shells) { s.x -= g.speed * dt; if (!s.got && s.x < mx + mw && s.x + 6 > mx && s.y < my + mh && s.y + 5 > my) { s.got = true; g.bonus += 5; sfx.play('coin'); } }
+      g.obs = g.obs.filter(o => o.x > -24); g.shells = g.shells.filter(s => s.x > -8 && !s.got);
+    },
+    a() {
+      if (g.state === 'ready') { g.state = 'run'; return; }
+      if (g.state === 'over') { finish(); return; }
+      if (g.state === 'run' && g.jumps < 2) { g.vy = g.jumps ? -150 : -175; g.y = Math.min(g.y, -1); g.jumps++; g.duck = 0; sfx.play('text'); }
+    },
+    dir(d) { if (g.state === 'run' && d === 'down') { g.duck = .55; if (g.y < 0) g.vy = Math.max(g.vy, 160); } if (g.state === 'run' && d === 'up' && g.jumps < 2) this.a(); },
+    quit() { g.state = 'over'; finish(); },
+    render() {
+      px(ctx, 0, 0, 160, 144, '#a8d8f0'); px(ctx, 0, 60, 160, 30, '#2f8fbf');
+      const o1 = (g.dist * .3) % 64; for (let i = -1; i < 4; i++) { const x = Math.round(i * 64 - o1); px(ctx, x + 10, 74, 24, 3, '#e8f4fa'); }
+      const o2 = (g.dist * .6) % 48; for (let i = -1; i < 5; i++) { const x = Math.round(i * 48 - o2); px(ctx, x, 84, 30, 10, '#4a8a4a'); px(ctx, x + 8, 76, 10, 10, '#3a7a3a'); }
+      px(ctx, 0, 94, 160, 18, '#8cc878'); px(ctx, 0, GROUND, 160, 32, '#c8b088'); px(ctx, 0, GROUND, 160, 2, '#a89068');
+      const o3 = g.dist % 20; for (let i = 0; i < 10; i++) px(ctx, Math.round(i * 20 - o3), GROUND + 10, 8, 2, '#f8f0d8');
+      for (const s of g.shells) { const x = Math.round(s.x), y = Math.round(s.y); px(ctx, x - 1, y - 1, 8, 7, '#202020'); px(ctx, x, y, 6, 5, '#f8d0c0'); px(ctx, x + 2, y + 1, 1, 3, '#e8a890'); }
+      for (const o of g.obs) { const x = Math.round(o.x);
+        if (o.k === 'cone') { px(ctx, x + 2, GROUND - 10, 4, 10, '#f07020'); px(ctx, x, GROUND - 2, 8, 2, '#202020'); px(ctx, x + 2, GROUND - 6, 4, 2, '#f8f8f8'); }
+        else if (o.k === 'crab') { px(ctx, x, GROUND - 6, 12, 6, '#d04030'); px(ctx, x + 2, GROUND - 8, 2, 2, '#202020'); px(ctx, x + 8, GROUND - 8, 2, 2, '#202020'); px(ctx, x - 2, GROUND - 5, 2, 2, '#d04030'); px(ctx, x + 12, GROUND - 5, 2, 2, '#d04030'); }
+        else if (o.k === 'bench') { px(ctx, x, GROUND - 10, 18, 3, '#7a4a28'); px(ctx, x, GROUND - 6, 18, 2, '#7a4a28'); px(ctx, x + 1, GROUND - 4, 2, 4, '#404040'); px(ctx, x + 15, GROUND - 4, 2, 4, '#404040'); }
+        else { const fy = GROUND - 20 + Math.round(Math.sin(g.t * 10) * 1), up = Math.floor(g.t * 8) % 2; px(ctx, x, fy + 2, 12, 4, '#f8f8f8'); px(ctx, x + 2, fy + up * 3 - 1, 7, 2, '#a8b0b8'); px(ctx, x - 2, fy + 3, 2, 1, '#f0a020'); } }
+      // Moose the golden retriever
+      const ducking = g.duck > 0 && g.y === 0, mx = 24, base = GROUND + Math.round(g.y), leg = g.y === 0 && g.state === 'run' ? Math.floor(g.t * 12) % 2 : 0, col = '#e0a848', dk = '#b07828';
+      if (ducking) { px(ctx, mx, base - 8, 20, 7, '#202020'); px(ctx, mx + 1, base - 7, 18, 5, col); px(ctx, mx + 16, base - 9, 6, 6, col); px(ctx, mx + 20, base - 7, 1, 1, '#202020'); }
+      else { px(ctx, mx, base - 12, 16, 8, '#202020'); px(ctx, mx + 1, base - 11, 14, 6, col); px(ctx, mx + 13, base - 16, 8, 8, '#202020'); px(ctx, mx + 14, base - 15, 6, 6, col); px(ctx, mx + 18, base - 13, 1, 1, '#202020'); px(ctx, mx + 13, base - 14, 2, 4, dk);
+        px(ctx, mx - 3, base - 12 + leg, 4, 2, col); px(ctx, mx + 2, base - 5, 2, 5 - leg * 2, dk); px(ctx, mx + 11, base - 5, 2, 3 + leg * 2, dk); px(ctx, mx + 15, base - 9, 4, 1, '#d04848'); }
+      if (g.state === 'ready') { txt('MOOSE RUN', 80, 20, '#202020'); txt('A: JUMP (TWICE!)', 80, 36, '#202020'); txt('DOWN: DUCK', 80, 48, '#202020'); }
+      if (g.state === 'over') { px(ctx, 24, 30, 112, 46, '#202020'); px(ctx, 26, 32, 108, 42, '#f8f8f0'); txt(`SCORE ${score()}`, 80, 38, '#202020'); txt(`BEST ${Math.max(g.best, score())}`, 80, 50, '#3a86b8'); txt('A: DONE', 80, 62, '#d04848'); }
+      else if (g.state !== 'ready') txt(String(score()), 80, 6, '#202020');
+    },
+  };
 }
 
 // ---------- Daily challenges ----------
@@ -2037,7 +2228,7 @@ function track(ev) {
 }
 // Points from minigames are capped per player per day so nobody can just grind.
 // Town activities pay out in shells (the game's own currency); real-life actions pay points.
-const SHELL_GAMES = new Set(['danceparty', 'bake', 'quiet', 'tea', 'dogbeach', 'smores', 'arcade', 'fish', 'lullaby', 'walk', 'sk', 'otter', 'journal', 'garden', 'hoops', 'pk', 'coop', 'tennis', 'pickle', 'pong', 'bowl', 'housework']);
+const SHELL_GAMES = new Set(['gull', 'run', 'danceparty', 'bake', 'quiet', 'tea', 'dogbeach', 'smores', 'arcade', 'fish', 'lullaby', 'walk', 'otter', 'journal', 'garden', 'hoops', 'pk', 'coop', 'tennis', 'pickle', 'pong', 'bowl', 'housework']);
 function capAward(game, cap, n) {
   const today = dateKey(new Date()), d = load('cap_' + game, { date: today, pts: [0, 0] });
   if (d.date !== today) { d.date = today; d.pts = [0, 0]; }
@@ -2083,9 +2274,9 @@ function arrive(c) {
   if (i < 0) return;
   s.found[i] = active; save('lost');
   sfx.play('catch');
-  addShells(active, 2); track('sock');
+  addPoints(active, 4); track('sock');
   const thing = LOST_THINGS.find(t => t.id === s.items[i].id), left = s.items.filter((_, j) => s.found[j] == null).length;
-  say([`LOST & FOUND: You found ${thing.name}!`, thing.line, `+2 SHELLS for ${nameOf(active)}. ` + (left ? `${left} more thing${left === 1 ? '' : 's'} missing today...` : 'Everything is found today!')]);
+  say([`LOST & FOUND: You found ${thing.name}!`, thing.line, `+4 POINTS for ${nameOf(active)}. ` + (left ? `${left} more thing${left === 1 ? '' : 's'} missing today...` : 'Everything is found today!')]);
 }
 function drawSocks(camX, camY) {
   const s = todaysLost(), c = chars[active], blink = Math.floor(performance.now() / 300) % 2;
@@ -2130,19 +2321,19 @@ function fishing() {
   const g = { cast: 1, casts: 5, total: 0, state: 'wait', t: 1.5 + Math.random() * 2.5, msg: '', caught: null, time: 0 };
   const finish = () => {
     endMini();
-    const earned = capAward('fish', 6, g.total);
+    const earned = capAward('fish', 6, g.total); recordScore('fish', g.total);
     say([`Done fishing! Your haul was worth ${g.total} shells.`, earned ? `${nameOf(active)} earns ${earned} shells!` : capMsg(6)]);
   };
   const next = () => {
     if (g.cast >= g.casts) return finish();
-    Object.assign(g, { cast: g.cast + 1, state: 'wait', t: 1.5 + Math.random() * 2.5, msg: '', caught: null });
+    Object.assign(g, { cast: g.cast + 1, state: 'wait', t: 1.2 + Math.random() * 3.2, msg: '', caught: null });
   };
   return {
     hud: () => `CAST ${g.cast}/${g.casts}<br>SHELLS ${g.total}`,
     update(dt) {
       g.time += dt; g.t -= dt;
       if (g.t > 0) return;
-      if (g.state === 'wait') { g.state = 'bite'; g.t = .65; }
+      if (g.state === 'wait') { g.state = 'bite'; g.t = .38 + Math.random() * .12; }
       else if (g.state === 'bite') { g.state = 'result'; g.msg = 'IT GOT AWAY!'; g.t = 1.4; sfx.play('bad'); }
       else next();
     },
@@ -2182,7 +2373,7 @@ function startLullaby() {
   say(['Time to sing Margo to sleep...', 'Press A when the marker is in the GREEN zone.'], () => startMini(lullaby()));
 }
 function lullaby() {
-  const g = { sleep: 0, need: 6, misses: 0, maxMiss: 4, pos: 0, dir: 1, speed: 70, zone: 30, time: 0, notes: [], flash: null, ft: 0, done: null, t: 0 };
+  const g = { sleep: 0, need: 8, misses: 0, maxMiss: 3, pos: 0, dir: 1, speed: 85, zone: 24, time: 0, notes: [], flash: null, ft: 0, done: null, t: 0 };
   const finish = () => {
     endMini();
     if (g.done === 'lose') { say(['Margo is WIDE awake. She wants to party.', 'Try again in a little bit!']); return; }
@@ -2249,7 +2440,7 @@ const PETS = [
   { name: 'MOOSE', kind: 'dog', x: 19, y: 15, big: true, col: '#e8b048', dark: '#b87818', collar: '#d03838', lines: [
     'MOOSE rolls over for belly rubs. Good boy!', 'MOOSE brings you a very slobbery tennis ball.',
     'MOOSE leans his whole body against your legs.', 'MOOSE does a happy zoomie lap around you.'] },
-  { name: 'MAISY', kind: 'dog', x: 13, y: 15, big: false, col: '#44444a', dark: '#2a2a2e', collar: '#f070a8', lines: [
+  { name: 'MAISY', kind: 'dog', x: 13, y: 15, big: false, col: '#8a5a32', dark: '#5e3b1e', collar: '#f070a8', lines: [
     'MAISY wiggles so hard her whole body wags.', 'MAISY gives you the softest little paw.',
     'MAISY sneezes from pure excitement.', 'MAISY gives you a big kiss. Right on the mouth.'] },
   { name: 'SK', kind: 'cat', x: 2, y: 2 },
@@ -2513,7 +2704,7 @@ function drawSwanBoat(sx, sy) {
 }
 function drawCoastLife(camX, camY, light) {
   const t = performance.now() / 1000;
-  const seen = (x, y) => x * 16 - camX > -20 && x * 16 - camX < 176 && y * 16 - camY > -20 && y * 16 - camY < 160;
+  const seen = (x, y) => x * 16 - camX > -20 && x * 16 - camX < SW + 16 && y * 16 - camY > -20 && y * 16 - camY < SH + 16;
   for (let y = Math.floor(camY / 16); y <= Math.floor((camY + 143) / 16); y++) for (let x = Math.floor(camX / 16); x <= Math.floor((camX + 159) / 16); x++) {
     if (map[y]?.[x] !== 'O') continue;
     const r = hash(x, y), ph = Math.floor(t * 2 + r) % 6;
@@ -2906,7 +3097,7 @@ function drawGarden(camX, camY) {
   const g = gardenState(), today = dateKey(new Date());
   GARDEN.forEach((p, i) => {
     const sx = p.x * 16 - camX, sy = p.y * 16 - camY;
-    if (sx < -16 || sx > 160 || sy < -16 || sy > 144) return;
+    if (sx < -16 || sx > SW || sy < -16 || sy > SH) return;
     const plot = g.plots[i], wet = wateredToday(plot);
     px(ctx, sx, sy, 16, 16, '#5a3a20'); px(ctx, sx + 1, sy + 1, 14, 14, wet ? '#5a3a28' : '#8a6040');
     for (let r = 4; r < 15; r += 4) px(ctx, sx + 1, sy + r, 14, 1, wet ? '#4a2a18' : '#6a4830');
@@ -2980,11 +3171,11 @@ function happLog() {
   if (log.date !== today) { log.date = today; log.done = [[], []]; log.errands = [{}, {}]; }
   return log;
 }
-function rewardHappening(h, pts) {
+function rewardHappening(h, pts, real) {
   const log = happLog();
   if (log.done[active].includes(h.id)) return 0;
   log.done[active].push(h.id); save('happlog'); track('happening');
-  if (pts) addShells(active, pts);
+  if (pts) (real ? addPoints : addShells)(active, pts);
   return pts || 0;
 }
 function visitHappening(h) {
@@ -2993,7 +3184,7 @@ function visitHappening(h) {
   if (h.errand) {
     const st = log.errands[active][h.id];
     if (st === 'done') { say([h.errand.thanks.split(':')[0] + ': Thanks again! Have a lovely day.']); return; }
-    if (st === 'have') { log.errands[active][h.id] = 'done'; save('happlog'); rewardHappening(h, 5); sfx.play('catch'); say([h.errand.thanks]); return; }
+    if (st === 'have') { log.errands[active][h.id] = 'done'; save('happlog'); rewardHappening(h, 6, true); sfx.play('catch'); say([h.errand.thanks, '+6 points for finding it!']); return; }
     log.errands[active][h.id] = 'looking'; save('happlog');
     say([h.errand.ask, `Look for ${h.errand.thing}. It will sparkle when you get close.`]);
     return;
@@ -3002,8 +3193,8 @@ function visitHappening(h) {
     const [q, opts, right] = RIDDLES[Math.floor(seeded('riddle' + dateKey(new Date()))() * RIDDLES.length)];
     if (!first) { say(['VISITOR: You already answered my riddle today. Come back tomorrow for another.']); return; }
     say(['VISITOR: Answer my riddle, traveler...', `VISITOR: ${q}`], () => choose(opts.map((o, i) => [o, () => {
-      const ok = i === right; rewardHappening(h, ok ? 5 : 1); sfx.play(ok ? 'catch' : 'bad');
-      say([ok ? 'VISITOR: Correct! You are wiser than you look. +5 SHELLS!' : `VISITOR: Wrong! It was ${opts[right]}. A shell for trying. +1 SHELL`]);
+      const ok = i === right; rewardHappening(h, ok ? 8 : 2, true); sfx.play(ok ? 'catch' : 'bad');
+      say([ok ? 'VISITOR: Correct! You are wiser than you look. +8 POINTS!' : `VISITOR: Wrong! It was ${opts[right]}. +2 points for trying.`]);
     }])));
     return;
   }
@@ -3114,10 +3305,10 @@ function syncStart(g, p, game) {
   g.run = Math.max(g.readyAt, p.readyAt); g.startAt = g.run + 3000; g.phase = 'count';
 }
 function hoopsGame(together) {
-  const g = { phase: together ? 'wait' : 'count', startAt: Date.now() + 3000, readyAt: Date.now(), run: together ? null : 'solo', time: 40, score: 0, partner: 0, meter: 0, dir: 1, speed: .9, ball: null, pball: null, waitT: 0, endT: 0, msg: '' };
+  const g = { phase: together ? 'wait' : 'count', startAt: Date.now() + 3000, readyAt: Date.now(), run: together ? null : 'solo', time: 40, score: 0, partner: 0, meter: 0, dir: 1, speed: 1.25, ball: null, pball: null, waitT: 0, endT: 0, msg: '' };
   const finish = () => {
     endMini();
-    const team = g.score + (together ? g.partner : 0), earned = capAward('hoops', 12, Math.ceil(team / 6));
+    const team = g.score + (together ? g.partner : 0), earned = capAward('hoops', 12, Math.ceil(team / 6)); recordScore('hoops', g.score);
     const bonus = together && g.partner > 0 ? capAward('coop', 5, 5) : 0;
     if (together) track('coop');
     say([together ? `Final team score: ${team}! (${nameOf(active)} ${g.score}, ${nameOf(1 - active)} ${g.partner})` : `Practice over. You scored ${g.score}.`,
@@ -3175,7 +3366,7 @@ function pkGame(together) {
   const finish = () => {
     endMini();
     const mine = together ? g.goals[active] : g.goals[0], theirs = together ? g.goals[1 - active] : g.goals[1];
-    const earned = capAward('pk', 10, 4 + (mine > theirs ? 3 : 0) + (together ? 3 : 0));
+    const earned = capAward('pk', 10, 4 + (mine > theirs ? 3 : 0) + (together ? 3 : 0)); recordScore('pk', mine);
     if (together) track('coop');
     say([`Final score: ${nameOf(active)} ${mine}, ${together ? nameOf(1 - active) : 'COACH'} ${theirs}!`, mine > theirs ? 'You win! Victory lap around the field.' : mine < theirs ? 'So close. Rematch?' : 'A tie! Everybody wins.', earned ? `+${earned} SHELLS for ${nameOf(active)}!` : capMsg(10)]);
   };
@@ -3240,9 +3431,9 @@ function pkGame(together) {
 // Rally sports (tennis, pickleball, ping pong). Together: you're at the bottom of your screen and your partner is
 // at the top. Your hit count travels in presence; when theirs goes up, the ball comes to you.
 const RALLY = {
-  tennis: { name: 'TENNIS', court: '#3a7ab8', out: '#4a8a5a', ball: '#e8f048', speed: 1.0, win: .2, cap: 10 },
-  pickle: { name: 'PICKLEBALL', court: '#3a8a6a', out: '#2a5a7a', ball: '#f8e060', speed: .72, win: .26, cap: 10 },
-  pong: { name: 'PING PONG', court: '#1f6a4a', out: '#5a3a2a', ball: '#f8f8f8', speed: 1.35, win: .17, cap: 10 },
+  tennis: { name: 'TENNIS', court: '#3a7ab8', out: '#4a8a5a', ball: '#e8f048', speed: 1.2, win: .15, cap: 10 },
+  pickle: { name: 'PICKLEBALL', court: '#3a8a6a', out: '#2a5a7a', ball: '#f8e060', speed: .9, win: .2, cap: 10 },
+  pong: { name: 'PING PONG', court: '#1f6a4a', out: '#5a3a2a', ball: '#f8f8f8', speed: 1.6, win: .12, cap: 10 },
 };
 function rallyGame(kind, together) {
   const R = RALLY[kind], slot0Serves = r => r % 2 === 0;
@@ -3252,7 +3443,7 @@ function rallyGame(kind, together) {
   const endRally = (who) => { g.best = Math.max(g.best, g.rally); g.rally = 0; g.ball = null; g.rallyNo++; g.serveT = 1.4; g.msg = who; g.msgT = 1.2; };
   const finish = () => {
     endMini();
-    const team = g.hits + (together ? g.ph : 0), earned = capAward(kind, R.cap, Math.ceil(team / 5));
+    const team = g.hits + (together ? g.ph : 0), earned = capAward(kind, R.cap, Math.ceil(team / 5)); recordScore(kind, g.hits);
     const bonus = together && g.ph > 0 ? capAward('coop', 5, 5) : 0;
     if (together) track('coop');
     g.best = Math.max(g.best, g.rally);
@@ -3333,7 +3524,7 @@ function bowlGame(together) {
   const finish = () => {
     endMini();
     const mine = g.totals[together ? active : 0], theirs = together ? g.totals[1 - active] : 0;
-    const earned = capAward('bowl', 10, Math.ceil(mine / 10) + (together ? 2 : 0));
+    const earned = capAward('bowl', 10, Math.ceil(mine / 10) + (together ? 2 : 0)); recordScore('bowl', mine);
     if (together) track('coop');
     say([together ? `Final: ${nameOf(active)} ${mine}, ${nameOf(1 - active)} ${theirs}!` : `You bowled ${mine} in ${FRAMES} frames!`, together ? (mine > theirs ? 'You win! Strike a pose.' : mine < theirs ? 'So close. Rematch?' : 'A tie!') : mine >= 40 ? 'Bowling legend.' : 'Nice rolling!', earned ? `+${earned} SHELLS for ${nameOf(active)}!` : capMsg(10)]);
   };
@@ -3409,7 +3600,7 @@ function missionLines() {
 }
 function drawReflections(camX, camY, light) {
   const t = performance.now() / 1000, T0 = townLevel().total, has = id => T0 >= roadAt(id), night = light === 'night';
-  const S = (x, y) => [x * 16 - camX, y * 16 - camY], vis = (sx, sy) => sx > -24 && sx < 184 && sy > -40 && sy < 168;
+  const S = (x, y) => [x * 16 - camX, y * 16 - camY], vis = (sx, sy) => sx > -24 && sx < SW + 24 && sy > -40 && sy < SH + 24;
   // the mission stone
   { const [sx, sy] = S(12, 13); if (vis(sx, sy)) { px(ctx, sx + 2, sy + 1, 12, 15, '#202020'); px(ctx, sx + 3, sy + 2, 10, 13, '#a8a8b4'); px(ctx, sx + 4, sy + 3, 8, 1, '#c8c8d4');
     if (mission().text) for (let i = 0; i < 4; i++) px(ctx, sx + 5, sy + 6 + i * 2, 6 - (i % 2) * 2, 1, '#5a5a68'); px(ctx, sx + 1, sy + 14, 14, 2, '#7a7a84'); } }
@@ -3418,7 +3609,7 @@ function drawReflections(camX, camY, light) {
   for (let i = 0; i < Math.min(flags, spots.length); i++) { const [sx, sy] = S(spots[i], 10); if (!vis(sx, sy)) continue;
     px(ctx, sx + 7, sy - 4, 2, 18, '#505058'); const wave = Math.round(Math.sin(t * 3 + i)); px(ctx, sx + 9, sy - 4 + wave, 7, 5, colors[i]); px(ctx, sx + 9, sy - 4 + wave, 7, 1, '#ffffff33'); }
   // level 2: flower boxes under windows
-  if (has('flowers')) for (const [x, y, wd, ht] of WINDOWS) { const sx = x - camX, sy = y + ht - camY; if (sx < -12 || sx > 170 || sy < -4 || sy > 150) continue;
+  if (has('flowers')) for (const [x, y, wd, ht] of WINDOWS) { const sx = x - camX, sy = y + ht - camY; if (sx < -12 || sx > SW + 10 || sy < -4 || sy > SH + 6) continue;
     px(ctx, sx - 1, sy + 1, wd + 2, 2, '#7a5030'); for (let i = 0; i < wd; i += 3) px(ctx, sx + i, sy, 2, 1, i % 2 ? '#e86880' : '#f8d030'); }
   // level 3: lamp posts along Alvarado
   if (has('lamps')) for (let x = 5; x <= 41; x += 6) { if (map[8][x] !== 'G' && map[8][x] !== 'F') continue; const [sx, sy] = S(x, 8); if (!vis(sx, sy)) continue;
@@ -3440,7 +3631,7 @@ function drawReflections(camX, camY, light) {
       px(ctx, gx - 2, gy, 5, 4, colors[k]); px(ctx, gx - 1, gy + 1, 3, 1, night ? '#f8e070' : '#ffffff88'); } } }
   // level 10: hot air balloons drifting over the bay
   if (has('balloons')) for (let k = 0; k < 3; k++) { const drift = ((t * 2 + k * 60) % 260) - 50, [sx, sy] = S(46 + k * 4, 22 + k * 3), bx = Math.round(sx + drift), by = Math.round(sy + Math.sin(t + k) * 3);
-    if (bx < -16 || bx > 176 || by < -30 || by > 150) continue; const c = colors[(k * 2) % 6], c2 = colors[(k * 2 + 1) % 6];
+    if (bx < -16 || bx > SW + 16 || by < -30 || by > SH + 6) continue; const c = colors[(k * 2) % 6], c2 = colors[(k * 2 + 1) % 6];
     px(ctx, bx + 2, by, 8, 2, c); px(ctx, bx, by + 2, 12, 7, c); px(ctx, bx + 4, by + 2, 4, 7, c2); px(ctx, bx + 2, by + 9, 8, 2, c); px(ctx, bx + 4, by + 11, 4, 1, c);
     px(ctx, bx + 4, by + 12, 1, 3, '#505058'); px(ctx, bx + 7, by + 12, 1, 3, '#505058'); px(ctx, bx + 4, by + 15, 4, 3, '#8a5a30'); }
   // level 11: a golden crown on top of the clock tower
@@ -3462,7 +3653,7 @@ function drawFireworks() {
 // A speech bubble over whoever just sent a chat message (when you're both in town)
 function drawBubble(text, sx, sy) {
   ctx.font = '8px "Press Start 2P", monospace';
-  const s = text.length > 16 ? text.slice(0, 15) + '…' : text, wd = Math.min(150, ctx.measureText(s).width + 8), x = Math.max(2, Math.min(158 - wd, sx + 8 - wd / 2)), y = Math.max(2, sy - 16);
+  const s = text.length > 16 ? text.slice(0, 15) + '…' : text, wd = Math.min(150, ctx.measureText(s).width + 8), x = Math.max(2, Math.min(SW - 2 - wd, sx + 8 - wd / 2)), y = Math.max(2, sy - 16);
   px(ctx, x - 1, y - 1, wd + 2, 13, '#202020'); px(ctx, x, y, wd, 11, '#f8f8f0'); px(ctx, sx + 7, y + 11, 3, 3, '#f8f8f0');
   ctx.fillStyle = '#202020'; ctx.textAlign = 'left'; ctx.textBaseline = 'top'; ctx.fillText(s, x + 4, y + 2);
 }
@@ -3475,11 +3666,11 @@ function lightLevel() {
 function drawLighting(light, camX, camY) {
   if (light === 'day') return;
   ctx.fillStyle = light === 'night' ? 'rgba(16,24,72,.5)' : 'rgba(96,48,96,.2)';
-  ctx.fillRect(0, 0, 160, 144);
+  ctx.fillRect(0, 0, SW, SH);
   const glow = light === 'night' ? '#f8d870' : '#f0c868';
   for (const [x, y, wd, ht] of WINDOWS) {
     const sx = x - camX, sy = y - camY;
-    if (sx > -10 && sx < 170 && sy > -10 && sy < 154) { px(ctx, sx, sy, wd, ht, glow); px(ctx, sx, sy + 3, wd, 1, '#303030'); }
+    if (sx > -10 && sx < SW + 10 && sy > -10 && sy < SH + 10) { px(ctx, sx, sy, wd, ht, glow); px(ctx, sx, sy + 3, wd, 1, '#303030'); }
   }
   for (const p of PUMPKINS) {
     const sx = p.x * 16 - camX, sy = p.y * 16 - camY, face = '#f8e060';
@@ -3491,15 +3682,15 @@ const FOGGY = seeded('fog' + dateKey(NOW))() < .35;
 const fogNow = () => FOGGY && new Date().getHours() >= 5 && new Date().getHours() < 11;
 function drawFog() {
   const t = performance.now() / 1000;
-  ctx.fillStyle = 'rgba(226,232,240,.3)'; ctx.fillRect(0, 0, 160, 144);
+  ctx.fillStyle = 'rgba(226,232,240,.3)'; ctx.fillRect(0, 0, SW, SH);
   ctx.fillStyle = 'rgba(240,244,250,.22)';
-  for (let i = 0; i < 4; i++) ctx.fillRect(0, Math.round((i * 41 + t * 4) % 170) - 16, 160, 12 + i * 3);
+  for (let i = 0; i < 4; i++) ctx.fillRect(0, Math.round((i * 41 + t * 4) % (SH + 26)) - 16, SW, 12 + i * 3);
 }
 function drawGulls(camX, camY) {
   if (camX < 26 * 16 && camY < 24 * 16) return;   // gulls stick to the coast
   const t = performance.now() / 1000;
   for (let i = 0; i < 2; i++) {
-    const x = Math.round(((t * (14 + i * 5) + i * 120) % 240) - 40), y = Math.round(18 + i * 34 + Math.sin(t * 1.3 + i) * 5), up = Math.floor(t * 4 + i) % 2;
+    const x = Math.round(((t * (14 + i * 5) + i * 120) % (SW + 80)) - 40), y = Math.round(18 + i * 34 + Math.sin(t * 1.3 + i) * 5), up = Math.floor(t * 4 + i) % 2;
     px(ctx, x, y + up, 3, 1, '#f8f8f8'); px(ctx, x + 3, y + 1, 1, 1, '#f8f8f8'); px(ctx, x + 4, y + up, 3, 1, '#f8f8f8');
     px(ctx, x, y + up, 1, 1, '#505058'); px(ctx, x + 6, y + up, 1, 1, '#505058');
   }
@@ -3507,7 +3698,7 @@ function drawGulls(camX, camY) {
 function drawSnowfall() {
   const t = performance.now() / 1000;
   for (let i = 0; i < 28; i++) {
-    const x = (i * 37 + Math.sin(t + i) * 6 + t * 8) % 164, y = (i * 53 + t * (14 + i % 5 * 3)) % 148;
+    const x = (i * 37 + Math.sin(t + i) * 6 + t * 8) % (SW + 4), y = (i * 53 + t * (14 + i % 5 * 3)) % (SH + 4);
     px(ctx, Math.round(x) - 2, Math.round(y) - 2, i % 3 ? 1 : 2, i % 3 ? 1 : 2, '#f8f8f8');
   }
 }
@@ -3561,10 +3752,19 @@ function update(dt) {
   }
 }
 const posOf = c => ({ x: (c.fx + (c.x - c.fx) * c.t) * 16, y: (c.fy + (c.y - c.fy) * c.t) * 16 });
+const FIXED = document.createElement('canvas'); FIXED.width = 160; FIXED.height = 144;
+const fctx = FIXED.getContext('2d');
+function renderFixed(fn) {
+  const main = ctx; ctx = fctx; fctx.clearRect(0, 0, 160, 144);
+  try { fn(); } finally { ctx = main; }
+  const k = Math.min(SW / 160, SH / 144), w = Math.round(160 * k), h = Math.round(144 * k);
+  ctx.fillStyle = '#101018'; ctx.fillRect(0, 0, SW, SH); ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(FIXED, Math.round((SW - w) / 2), Math.round((SH - h) / 2), w, h);
+}
 function render() {
-  if (mode === 'arcade') { renderArcade(); return; }
-  if (mode === 'mini') { mini.render(); return; }
-  if (scene === 'house') { renderHouse(); return; }
+  if (mode === 'arcade') { renderFixed(renderArcade); return; }
+  if (mode === 'mini') { renderFixed(() => mini.render()); return; }
+  if (scene === 'house') { renderFixed(renderHouse); return; }
   const p = posOf(chars[active]);
   const camX = Math.max(0, Math.min(MW * 16 - VW * 16, Math.round(p.x + 8 - VW * 8)));
   const camY = Math.max(0, Math.min(MH * 16 - VH * 16, Math.round(p.y + 8 - VH * 8)));
@@ -3826,7 +4026,7 @@ function drawActing(e, sx, sy, frame) {
 }
 function danceMenu() {
   const mine = DANCES.filter(d => ownsDance(active, d.id));
-  return [...mine.map(d => [d.name.toUpperCase(), 'dance:' + d.id]), ['GET MORE DANCES', 'dshop'], ['BACK', '@main']];
+  return [...mine.map(d => [d.name.toUpperCase(), 'dance:' + d.id]), ['GET MORE DANCES', 'dshop'], ['BACK', '@social']];
 }
 
 // ---------- Missions: things the two of you do together in Family Town ----------
@@ -3946,17 +4146,17 @@ function missionMarkers(camX, camY) {
   if (n.ready) spots.push([m.steps[n.ti].at, '#e04858']);
   for (const [[x, y], col] of spots) {
     const sx = x * 16 - camX + 6, sy = y * 16 - camY - 10 + Math.round(Math.sin(t * 4) * 2);
-    if (sx < -8 || sx > 168 || sy < -16 || sy > 150) continue;
+    if (sx < -8 || sx > SW + 8 || sy < -16 || sy > SH + 6) continue;
     px(ctx, sx - 1, sy - 1, 6, 12, '#202020'); px(ctx, sx, sy, 4, 7, col); px(ctx, sx, sy + 8, 4, 2, col);
   }
   if (live.missionParty && Date.now() - live.missionParty < 5000) for (let i = 0; i < 24; i++) {
-    const k = (t * 60 + i * 37) % 150; px(ctx, (i * 53) % 160, Math.round(k), 2, 3, ['#e04848', '#3a86b8', '#f0c030', '#3c9a63', '#d0679a'][i % 5]);
+    const k = (t * 60 + i * 37) % SH; px(ctx, (i * 53) % SW, Math.round(k), 2, 3, ['#e04848', '#3a86b8', '#f0c030', '#3c9a63', '#d0679a'][i % 5]);
   }
   // when you're far away, an arrow at the edge of the screen points the way
   const c = chars[active], tgt = spots[0]; if (!tgt) return;
-  const dx = tgt[0][0] * 16 - camX - 80, dy = tgt[0][1] * 16 - camY - 72;
-  if (Math.abs(dx) < 90 && Math.abs(dy) < 80) return;
-  const ang = Math.atan2(dy, dx), ax = Math.round(80 + Math.cos(ang) * 66), ay = Math.round(72 + Math.sin(ang) * 56);
+  const dx = tgt[0][0] * 16 - camX - SW / 2, dy = tgt[0][1] * 16 - camY - SH / 2;
+  if (Math.abs(dx) < SW / 2 + 10 && Math.abs(dy) < SH / 2 + 8) return;
+  const ang = Math.atan2(dy, dx), ax = Math.round(SW / 2 + Math.cos(ang) * (SW / 2 - 14)), ay = Math.round(SH / 2 + Math.sin(ang) * (SH / 2 - 16));
   px(ctx, ax - 3, ay - 3, 7, 7, '#202020'); px(ctx, ax - 2, ay - 2, 5, 5, tgt[1]); px(ctx, Math.round(ax + Math.cos(ang) * 5) - 1, Math.round(ay + Math.sin(ang) * 5) - 1, 3, 3, tgt[1]);
 }
 function missionsMenu() {
@@ -3975,7 +4175,7 @@ function missionsMenu() {
 
 // ---------- Carmel and Big Sur ----------
 function bakeGame() {
-  const g = { score: 0, need: 5, miss: 0, pos: 0, dir: 1, speed: 80, zone: 26, done: null, t: 0, flash: null, ft: 0 };
+  const g = { score: 0, need: 6, miss: 0, pos: 0, dir: 1, speed: 95, zone: 22, done: null, t: 0, flash: null, ft: 0 };
   const finish = () => { endMini(); if (g.done === 'lose') { say(['The dough is a sticky mess. Try again!']); return; }
     const e = capAward('bake', 6, 6); say(['A perfect sourdough loaf! Crackly crust, open crumb.', e ? `${nameOf(active)} earns ${e} shells!` : 'Delicious. (Bakery shells already earned today.)']); };
   return {
@@ -3985,7 +4185,7 @@ function bakeGame() {
     a() { if (g.done) return; g.ft = .4;
       if (Math.abs(g.pos - 60) <= g.zone / 2) { g.score++; g.speed += 14; g.zone = Math.max(12, g.zone - 3); g.flash = 'good'; sfx.play('coin'); if (g.score >= g.need) { g.done = 'win'; g.t = 1.6; } }
       else { g.miss++; g.flash = 'bad'; sfx.play('bad'); if (g.miss >= 3) { g.done = 'lose'; g.t = 1.4; } } },
-    draw() {
+    render() {
       px(ctx, 0, 0, 160, 144, '#f0dcb0'); px(ctx, 0, 100, 160, 44, '#a87040'); px(ctx, 0, 100, 160, 2, '#7a4a28');
       const sq = g.flash === 'good' ? 4 : 0, lw = 60 + g.score * 4 + sq, lh = 26 + g.score * 2 - sq;
       px(ctx, 80 - lw / 2 - 1, 98 - lh - 1, lw + 2, lh + 2, '#5a3a18'); px(ctx, 80 - lw / 2, 98 - lh, lw, lh, g.done === 'win' ? '#c88a40' : '#f4e4c4');
@@ -4015,7 +4215,7 @@ function campfire() {
   say(['You toast a marshmallow over the campfire...', Math.random() < .3 ? 'It catches fire! Extra crispy. Still delicious.' : 'Golden brown. Perfect s’more.', e ? `+${e} shells!` : 'The stars are amazing tonight.']);
 }
 function drawAreaExtras(camX, camY, light) {
-  const t = performance.now() / 1000, S = (x, y) => [x * 16 - camX, y * 16 - camY], vis = (sx, sy) => sx > -24 && sx < 184 && sy > -40 && sy < 168;
+  const t = performance.now() / 1000, S = (x, y) => [x * 16 - camX, y * 16 - camY], vis = (sx, sy) => sx > -24 && sx < SW + 24 && sy > -40 && sy < SH + 24;
   const barricade = (x, y, label) => { const [sx, sy] = S(x, y); if (!vis(sx, sy)) return;
     px(ctx, sx + 1, sy + 4, 30, 6, '#202020'); for (let i = 0; i < 5; i++) px(ctx, sx + 2 + i * 6, sy + 5, 3, 4, i % 2 ? '#f8f8f0' : '#e07030');
     px(ctx, sx + 3, sy + 10, 2, 6, '#505058'); px(ctx, sx + 27, sy + 10, 2, 6, '#505058'); };
@@ -4194,7 +4394,9 @@ function refreshHeader() {
 }
 
 // ----- shared bits -----
-const ava = (i, size) => `<img class="ava" src="${avatarURL(i)}" alt=""${size ? ` style="width:${size}px;height:${size}px;border-radius:${Math.round(size / 3.3)}px"` : ''}>`;
+const faces = () => load('faces', {});
+const ava = (i, size) => { const f = faces()[i], img = `<img class="ava" src="${avatarURL(i)}" alt=""${size ? ` style="width:${size}px;height:${size}px;border-radius:${Math.round(size / 3.3)}px"` : ''}>`;
+  return f && (!size || size >= 26) ? `<span class="ava-wrap">${img}<img class="face" src="${f}" alt=""></span>` : img; };
 const fmtTime = ms => new Date(ms).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
 const labelChip = w => `<span class="lbl" style="--c:${LABEL_COLORS[w] || LABEL_COLORS[2]}">${esc(titleCase(labelName(w)))}</span>`;
 const evWhen = e => `${new Date(e.date + 'T00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}${e.end && e.end !== e.date ? ' – ' + new Date(e.end + 'T00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : ''}${e.time ? ' · ' + timeFmt(e.time).toLowerCase() + (e.endTime ? '–' + timeFmt(e.endTime).toLowerCase() : '') : ''}`;
@@ -4236,14 +4438,16 @@ const TAB_RENDER = {
     const nextCh = b.book != null ? nextChapter(b, active) : null, lost = todaysLost(), lostLeft = lost.items.filter((_, i) => lost.found[i] == null).length;
     const lastMsg = notesList().slice().sort((a, b) => b.at - a.at)[0], un = unreadNotes().length;
     return `${partnerLive() ? `<section class="card live-card"><div class="row2" style="justify-content:space-between">${ava(1 - active, 32)}<span style="flex:1; font-weight:800">${esc(partnerName())} is ${live.peer.view === 'town' ? 'in Family Town right now' : 'online right now'}</span>${live.peer.view === 'town' ? '<button class="btn" data-act="town">Join</button>' : ''}</div></section>` : ''}
+      ${recapCard()}
+      ${focusCard()}
       ${checkinCard()}
+      <section class="card"><div class="card-h"><span class="eyebrow">Today</span><button class="link" data-act="newev">+ Add</button></div>
+        ${today.map(evCard).join('') || '<p class="empty">Nothing on the calendar today.</p>'}
+        ${upcoming.length ? `<div class="eyebrow" style="margin:12px 0 6px">Coming up</div>${upcoming.map(([i, e]) => `<div class="meta muted2" style="margin-top:6px">${i === 1 ? 'Tomorrow' : addDays(i).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}</div>${evCard(e)}`).join('')}` : ''}</section>
       ${crownDeals().owed.filter(o => !o.done && (o.from === active || o.to === active)).map(o => `<section class="card crown-card"><div class="owed" style="margin:0"><div><div class="eyebrow">${o.from === active ? 'You owe ' + esc(partnerName()) : esc(partnerName()) + ' owes you'}</div><div style="font-weight:800">${esc(o.text)}</div></div><button class="btn sm" data-act="owedone" data-id="${o.id}">Done</button></div></section>`).join('')}
       ${raceCard()}
       ${missionCard()}
       ${partNow() ? photosCard(dateKey(new Date())) : ''}
-      <section class="card"><div class="card-h"><span class="eyebrow">Today</span><button class="link" data-act="newev">+ Add</button></div>
-        ${today.map(evCard).join('') || '<p class="empty">Nothing on the calendar today.</p>'}
-        ${upcoming.length ? `<div class="eyebrow" style="margin:12px 0 6px">Coming up</div>${upcoming.map(([i, e]) => `<div class="meta muted2" style="margin-top:6px">${i === 1 ? 'Tomorrow' : addDays(i).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}</div>${evCard(e)}`).join('')}` : ''}</section>
       <section class="card"><div class="card-h"><span class="eyebrow">Chat${un ? ` &middot; ${un} new` : ''}</span><button class="link" data-act="tab" data-tab="chat">Open chat</button></div>
         ${chatPreview(lastMsg) || `<p class="empty">Say hi to ${esc(partnerName())}.</p>`}
         <form class="row2" data-form="note" style="margin-top:10px"><input class="in" name="text" maxlength="400" placeholder="Message ${esc(partnerName())}" aria-label="Message"><button class="btn">Send</button></form></section>
@@ -4261,7 +4465,7 @@ const TAB_RENDER = {
       ${dinner ? `<section class="card"><div class="card-h"><span class="eyebrow">Dinner tonight</span><button class="link" data-act="list" data-sub="dinners">Plan</button></div><div style="font-weight:800">${esc(dinner.dish)}</div></section>` : ''}
       <section class="card town-card"><div class="card-h"><span class="eyebrow">In Family Town today</span><span class="eyebrow">Level ${townLevel().level} &middot; ${shells(active)} shells</span></div>
         <ul>${HAPPENING_NOW.map(h => `<li>${esc(h.title[0].toUpperCase() + h.title.slice(1))}</li>`).join('')}<li>Lost &amp; found: ${lostLeft} thing${lostLeft === 1 ? '' : 's'} missing</li><li>Garden: ${esc(titleCase(gardenSummary()))}</li></ul>
-        <button class="town-btn" data-act="town">Enter Family Town</button></section>`;
+        <div class="row2"><button class="town-btn" data-act="town" style="flex:1">Enter Family Town</button><button class="btn ghost" data-act="us" data-sub="wardrobe">Shop</button></div></section>`;
   },
 
   calendar() {
@@ -4350,14 +4554,91 @@ const TAB_RENDER = {
   },
 
   us() {
-    const segs = [['points', 'Points'], ['journal', 'Journal'], ['bible', 'Bible'], ['mission', 'Mission'], ['wardrobe', 'Wardrobe']];
+    const segs = [['points', 'Points'], ['journal', 'Journal'], ['bible', 'Bible'], ['mission', 'Mission'], ['wardrobe', 'Shop'], ['settings', 'Settings']];
     const seg = `<div class="seg">${segs.map(([k, l]) => `<button class="chip ${usTab === k ? 'on' : ''}" data-act="us" data-sub="${k}">${l}</button>`).join('')}</div>`;
-    return seg + (usTab === 'points' ? crownCard() + pointsScreen() + accountCard() : usTab === 'mission' ? missionScreen() : usTab === 'journal' || usTab === 'checkins' ? journalScreen() : usTab === 'wardrobe' ? wardrobeScreen() : bibleScreen());
+    return seg + (usTab === 'recap' ? recapScreen() : usTab === 'settings' ? settingsScreen() : usTab === 'points' ? crownCard() + hiScoresCard() + pointsScreen() : usTab === 'mission' ? missionScreen() : usTab === 'journal' || usTab === 'checkins' ? journalScreen() : usTab === 'wardrobe' ? wardrobeScreen() : bibleScreen());
   },
 };
 
+// ---------- The Sunday recap: the crown, an award for everyone, the week's photos, and planning the next one ----------
+const lastWeekKey = () => { const d = new Date(weekKey() + 'T12:00'); d.setDate(d.getDate() - 7); return dateKey(d); };
+const weekDays = w => Array.from({ length: 7 }, (_, i) => { const d = new Date(w + 'T12:00'); d.setDate(d.getDate() + i); return dateKey(d); });
+const recapReady = () => load('history', []).some(h => h.week === lastWeekKey());
+function weekAwards(w) {
+  const days = weekDays(w), inWk = d => days.includes(d), A = [], nm = i => esc(titleCase(nameOf(i)));
+  const both = (label, f, unit, blurb) => { const x = f(0), y = f(1); if (!x && !y) return;
+    if (x === y) A.push({ who: -1, label, text: `You tied with ${x} ${unit}${x === 1 ? '' : 's'} each. ${blurb}` });
+    else { const i = x > y ? 0 : 1; A.push({ who: i, label, text: `${nm(i)}: ${Math.max(x, y)} ${unit}${Math.max(x, y) === 1 ? '' : 's'}. ${blurb}` }); } };
+  for (const [g, who, top, other] of hiBonus(w).wins) A.push({ who, label: `${HI_GAMES[g]} champ`, text: who < 0 ? `A tie at ${top}! +${HI_PTS / 2} points each.` : `${nm(who)} scored ${top}${other ? ` (vs ${other})` : ''}. +${HI_PTS} points.` });
+  both('Showed up every day', i => weekStats(i, w).days.length, 'day', 'Thanks for being here.');
+  both('Chore hero', i => choreLog().filter(e => e.by === i && inWk(e.day)).length, 'chore', 'The house noticed.');
+  both('Heart sharer', i => days.filter(d => checkins(i)[d]).length, 'check-in', 'Thanks for opening up.');
+  both('Memory maker', i => photoLog().filter(p => p.by === i && inWk(p.date)).length, 'photo', 'Look at all these moments.');
+  const mdone = missionState().done.filter(d => d.week === w).length;
+  if (mdone) A.push({ who: -1, label: 'Dream team', text: `You finished ${mdone} mission${mdone === 1 ? '' : 's'} together!` });
+  for (const i of [0, 1]) if (!A.some(a => a.who === i || a.who === -1)) A.push({ who: i, label: 'Heart of the home', text: `${nm(i)} kept this family going this week. We see you.` });
+  return A;
+}
+function recapScreen(w) {
+  w = w || lastWeekKey();
+  const h = load('history', []).find(x => x.week === w), days = weekDays(w), nm = i => esc(titleCase(nameOf(i)));
+  const range = `${new Date(days[0] + 'T12:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} – ${new Date(days[6] + 'T12:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
+  if (!h) return `<section class="card"><div class="card-h"><span class="eyebrow">Week in review</span></div><p class="empty">Your first recap arrives Sunday at 6pm, when the crown is decided.</p></section>`;
+  const pics = photoLog().filter(p => days.includes(p.date) && photoSrc(p)).sort((a, b) => a.at - b.at);
+  const ciDays = days.filter(d => checkins(0)[d] || checkins(1)[d]);
+  const chores = choreLog().filter(e => days.includes(e.day)).length, missions = missionState().done.filter(d => d.week === w).length;
+  const evs = load('events', []).filter(e => days.includes(e.date)).length;
+  const lines = [chores && `${chores} chores done around the house`, missions && `${missions} mission${missions === 1 ? '' : 's'} finished together`, evs && `${evs} thing${evs === 1 ? '' : 's'} on the calendar`, pics.length && `${pics.length} photo${pics.length === 1 ? '' : 's'} of your life together`, ciDays.length && `${ciDays.length} day${ciDays.length === 1 ? '' : 's'} of check-ins`].filter(Boolean);
+  const win = h.winner, cheer = win < 0 ? 'A tie! The crown stays where it is. What a team.' : `${nm(win)} wears the crown this week! ${nm(1 - win)}, you were amazing too.`;
+  const nextMon = weekKey(), focus = load('weekFocus', {});
+  return `<section class="card recap-hero"><div class="eyebrow">Week in review &middot; ${range}</div>
+      <div class="recap-crown">${win >= 0 ? ava(win, 64) : `${ava(0, 48)}${ava(1, 48)}`}</div>
+      <h2 style="margin:6px 0 4px; text-align:center">${cheer}</h2>
+      <p class="muted2" style="text-align:center; margin:0">${nm(0)} ${h.pts[0]} &middot; ${nm(1)} ${h.pts[1]}${h.hi && (h.hi[0] || h.hi[1]) ? ' (including high-score bonuses)' : ''}</p></section>
+    <section class="card"><div class="card-h"><span class="eyebrow">Awards</span><span class="muted2">Everybody wins something</span></div>
+      ${weekAwards(w).map(a => `<div class="award">${a.who >= 0 ? ava(a.who, 36) : `<span class="award-both">${ava(0, 26)}${ava(1, 26)}</span>`}<div><div style="font-weight:800">${esc(a.label)}</div><div class="muted2">${a.text}</div></div></div>`).join('')}</section>
+    ${lines.length ? `<section class="card"><div class="card-h"><span class="eyebrow">What you did together</span></div><ul class="recap-list">${lines.map(l => `<li>${l}</li>`).join('')}</ul></section>` : ''}
+    ${pics.length ? `<section class="card"><div class="card-h"><span class="eyebrow">The week in photos</span><span class="muted2">${pics.length}</span></div><div class="recap-pics">${pics.map(p => `<img src="${photoSrc(p)}" alt="${esc(titleCase(p.part || ''))} photo" loading="lazy">`).join('')}</div></section>` : ''}
+    ${ciDays.length ? `<section class="card"><div class="card-h"><span class="eyebrow">How you've been</span></div>${ciDays.map(d => `<div class="jday"><div class="eyebrow" style="margin-bottom:6px">${new Date(d + 'T12:00').toLocaleDateString('en-US', { weekday: 'long' })}</div><div class="ci-grid">${ciBox(active, checkins(active)[d])}${ciBox(1 - active, checkins(1 - active)[d])}</div></div>`).join('')}</section>` : ''}
+    <section class="card plan-card"><div class="card-h"><span class="eyebrow">Plan the week ahead</span></div>
+      <form class="stack2" data-form="weekfocus"><label class="muted2" for="wf">One thing we want this week to be about</label><input class="in" id="wf" name="t" maxlength="80" value="${esc(focus.week === nextMon ? focus.text : '')}" placeholder="Rest, date night, and a beach walk"><button class="btn ghost">Save our focus</button></form>
+      <form class="stack2" data-form="plan" style="margin-top:14px"><div class="row2"><select class="in" name="kind" aria-label="Type" style="flex:0 0 120px"><option value="quests">To-do</option><option value="groceries">Grocery</option><option value="event">Calendar</option></select>
+        <input class="in" name="t" maxlength="60" placeholder="Call the vet" aria-label="What"></div><input class="in" name="date" type="date" value="${nextMon < dateKey(new Date()) ? dateKey(new Date()) : nextMon}" aria-label="Date (for calendar)"><button class="btn">Add to next week</button></form>
+      <p class="muted2" style="margin:8px 0 0">To-dos and groceries go straight onto your lists. Calendar items land on the date you pick.</p></section>`;
+}
+function recapCard() {
+  if (!recapReady() || memOr('recapSeen', '') === lastWeekKey()) return '';
+  const h = load('history', []).find(x => x.week === lastWeekKey()), win = h.winner;
+  return `<section class="card recap-hero" style="text-align:left"><div class="row2" style="align-items:center">${win >= 0 ? ava(win, 48) : ava(active, 48)}<div style="flex:1"><div class="eyebrow">Your week in review is ready</div><div style="font-weight:800">${win < 0 ? 'A tie this week! See your awards.' : `${esc(titleCase(nameOf(win)))} won the crown. Awards for everyone!`}</div></div></div>
+    <button class="btn" data-act="openrecap" style="width:100%; margin-top:12px">See the recap</button></section>`;
+}
+function focusCard() {
+  const f = load('weekFocus', {});
+  return f.week === weekKey() && f.text ? `<section class="card focus-card"><div class="eyebrow">This week we're focused on</div><div style="font-weight:800; font-size:18px; margin-top:2px">${esc(f.text)}</div></section>` : '';
+}
+function hiScoresCard() {
+  const w = weekKey(), a = weekStats(0, w).best, b = weekStats(1, w).best, rows = Object.keys(HI_GAMES).filter(g => a[g] || b[g]);
+  return `<section class="card"><div class="card-h"><span class="eyebrow">This week's high scores</span><span class="muted2">Top score = +${HI_PTS} pts Sunday</span></div>
+    ${rows.map(g => { const x = a[g] || 0, y = b[g] || 0; return `<div class="goal-top" style="padding:6px 0; border-top:1px solid var(--a-line)"><span style="font-weight:700">${HI_GAMES[g]}</span><span><b style="color:${x >= y ? 'var(--a-kelp)' : 'inherit'}">${esc(titleCase(nameOf(0)))} ${x}</b> &middot; <b style="color:${y >= x ? 'var(--a-kelp)' : 'inherit'}">${esc(titleCase(nameOf(1)))} ${y}</b></span></div>`; }).join('') || '<p class="empty">Play Gull Glide, Moose Run, or any game in Family Town to set a high score.</p>'}
+    ${recapReady() ? '<button class="link" data-act="openrecap" style="margin-top:10px">See last week\'s recap</button>' : ''}</section>`;
+}
+
+function settingsScreen() {
+  const f = faces()[active], snd = sfx.prefs();
+  return `<section class="card"><div class="card-h"><span class="eyebrow">You</span></div>
+      <div class="row2" style="gap:16px; align-items:center">${f ? `<img class="face-big" src="${f}" alt="Your photo">` : `<div class="face-big" style="display:grid; place-items:center; background:var(--a-bay-soft); font-size:34px">${esc(titleCase(nameOf(active))[0])}</div>`}
+        <div style="display:flex; flex-direction:column; gap:8px">${ava(active, 48)}<label class="btn ghost sm" style="cursor:pointer">${f ? 'Change photo' : 'Add your photo'}<input type="file" accept="image/*" hidden data-face="1"></label>${f ? '<button class="link" data-act="faceoff" style="color:var(--a-soft); font-size:13px">Remove photo</button>' : ''}</div></div>
+      <p class="muted2" style="margin:10px 0 0">Your real photo shows next to your pixel character in chat, on Home, and in the Sunday recap.</p>
+      <form class="row2" data-form="myname" style="margin-top:14px"><input class="in" name="n" maxlength="10" value="${esc(titleCase(nameOf(active)))}" aria-label="Your name"><button class="btn">Save name</button></form></section>
+    <section class="card"><div class="card-h"><span class="eyebrow">Look</span></div><p class="muted2" style="margin:0 0 10px">Change your character's shirt, hair, hat, and dances.</p><button class="btn ghost" data-act="us" data-sub="wardrobe" style="width:100%">Open the Shell Shop &amp; closet</button></section>
+    <section class="card"><div class="card-h"><span class="eyebrow">Sound</span></div>
+      <div class="row2"><button class="chip ${snd.fx ? 'on' : ''}" data-act="sndtoggle" data-k="fx">Game sounds ${snd.fx ? 'on' : 'off'}</button><button class="chip ${snd.music ? 'on' : ''}" data-act="sndtoggle" data-k="music">Town music ${snd.music ? 'on' : 'off'}</button></div></section>
+    <section class="card"><div class="card-h"><span class="eyebrow">Family Town</span></div>
+      <button class="btn ghost" data-act="replayintro" style="width:100%">Show the town welcome again</button></section>
+    ${accountCard()}`;
+}
 function accountCard() {
-  if (!window.FT_WEB || !FT_WEB.email()) return '';
+  if (!window.FT_WEB || !FT_WEB.email()) return `<section class="card"><div class="card-h"><span class="eyebrow">Account</span></div><p class="muted2" style="margin:0">${sync.status === 'live' ? 'Saving live and sharing with ' + esc(partnerName()) + '.' : 'Saved on this phone.'}</p></section>`;
   return `<section class="card"><div class="card-h"><span class="eyebrow">Account</span></div><p class="muted2" style="margin:0 0 10px">Signed in as ${esc(FT_WEB.email())}.</p>
     <div class="row2"><button class="btn ghost" data-act="famcode">Show family code</button><button class="btn ghost" data-act="signout">Sign out</button></div></section>`;
 }
@@ -4707,7 +4988,7 @@ function journalScreen() {
         ${photoLog().some(p => p.date === d) ? photosCard(d, true) : ''}</div>`).join('') || '<p class="empty">Each day\'s check-ins and photos collect here, a little scrapbook of your life together.</p>'}</section>`;
 }
 function promptCheckin() {
-  if (!names || todayCheckin(active) || memOr('ciAsked', '') === dateKey(new Date())) return;
+  if (!names || sheet || todayCheckin(active) || memOr('ciAsked', '') === dateKey(new Date())) return;
   mem.ciAsked = dateKey(new Date()); save('ciAsked');
   sheet = { kind: 'checkin' }; renderSheet();
 }
@@ -4717,6 +4998,11 @@ function renderSheet() {
   const host = $('aSheet');
   if (!sheet) { host.hidden = true; host.innerHTML = ''; return; }
   host.hidden = false;
+  if (sheet.kind === 'whoami') {
+    host.innerHTML = `<div class="sheet-bg"></div><div class="sheet"><div class="sheet-grab"></div><h3>Who's using this account?</h3><p class="muted2" style="margin:0 0 12px">You only pick once. After this, your account always opens as you.</p>
+      <div class="row2">${[0, 1].map(i => `<button class="btn ghost" data-act="claim" data-slot="${i}" style="flex:1; flex-direction:column; display:flex; align-items:center; gap:6px; padding:16px">${ava(i, 56)}<b>${esc(titleCase(nameOf(i)))}</b></button>`).join('')}</div></div>`;
+    return;
+  }
   if (sheet.kind === 'esv') {
     host.innerHTML = `<div class="sheet-bg" data-act="closesheet"></div><div class="sheet esv-sheet"><div class="sheet-grab"></div><div class="row2" style="justify-content:space-between"><h3 style="margin:0">${esc(sheet.title || sheet.q)}</h3><button class="x" data-act="closesheet" aria-label="Close">&times;</button></div>
       <div class="esv-text">${sheet.html || (sheet.err ? `<p class="empty">${esc(sheet.err)}</p><p><a href="${passageUrl(...sheet.q.split(/ (?=\d+$)/))}" target="_blank" rel="noopener">Read it on Bible Gateway instead</a></p>` : '<p class="empty">Opening the ESV...</p>')}</div></div>`;
@@ -4795,6 +5081,7 @@ function enterTownNow(spot) {
 }
 
 $('aTabs').addEventListener('click', e => { const b = e.target.closest('[data-tab]'); if (!b) return; appTab = b.dataset.tab; store.set('tab', appTab); bibleSel = null; editGoal = false; renderApp(); });
+$('toSettings').addEventListener('click', () => showApp('us', 'settings'));
 $('toTown').addEventListener('click', () => showTown());
 function onAppClick(e) {
   const el = e.target.closest('[data-act]');
@@ -4860,6 +5147,11 @@ function onAppClick(e) {
       sheet.fromOuting = +d.i; renderSheet(); break;
     }
     case 'readch': markChapter(+d.ch, d.off !== '1'); renderApp(); break;
+    case 'faceoff': { const fc = faces(); delete fc[active]; mem.faces = fc; save('faces'); renderApp(); break; }
+    case 'sndtoggle': sfx.toggle(d.k); renderApp(); break;
+    case 'replayintro': pendingIntro = true; townGreeted = false; showTown(); break;
+    case 'openrecap': mem.recapSeen = lastWeekKey(); save('recapSeen'); appTab = 'us'; usTab = 'recap'; renderApp(); break;
+    case 'claim': claimSlot(+d.slot); sheet = null; renderSheet(); updateHud(); appToast(`Hi, ${titleCase(nameOf(+d.slot))}! This account is yours now.`); setTimeout(promptCheckin, 500); break;
     case 'esvread': {
       const q = d.q; sheet = { kind: 'esv', q }; renderSheet();
       FT_WEB.esv(q).then(r => { if (sheet && sheet.q === q) { sheet.html = r.html; sheet.title = r.title || q; renderSheet(); } })
@@ -4940,6 +5232,15 @@ function onAppSubmit(e) {
       const b = bible(), c = +f.dataset.ch;
       b.refl[c] = [...(b.refl[c] || []), { by: active, text: v('text'), at: Date.now() }]; save('bible'); break;
     }
+    case 'myname': { const n = v('n').trim().slice(0, 10); if (!n) return; names = [...names]; names[active] = n.toUpperCase(); mem.names = names; save('names'); for (const k in avatarCache) delete avatarCache[k]; appToast('Name saved'); break; }
+    case 'weekfocus': mem.weekFocus = { week: weekKey(), text: v('t').trim() }; save('weekFocus'); appToast('Saved. It shows at the top of Home all week.'); break;
+    case 'plan': {
+      const t = v('t').trim(); if (!t) return;
+      if (v('kind') === 'event') { const all = load('events', []), ev = { id: uid(), by: active, at: Date.now(), title: t, date: v('date') || dateKey(new Date()), who: 2, end: '', time: '', endTime: '', repeat: '', note: 'Planned in the Sunday recap' };
+        all.push(ev); noteAdded('events', ev); save('events'); appToast(`On the calendar for ${evWhen(ev)}`); }
+      else { addListItem(v('kind'), t); appToast(v('kind') === 'groceries' ? 'Added to groceries' : 'Added to to-dos'); }
+      break;
+    }
     case 'deal': { if (!v('t')) return; crownDeals().items.push({ id: uid(), text: v('t'), agree: [active === 0, active === 1], by: active }); save('crownDeals'); appToast(`Suggested. ${partnerName()} needs to agree.`); break; }
     case 'mission': { const m = mission(); m.text = v('text'); save('mission'); editGoal = false; appToast('Mission saved. It\'s carved into the plaza stone.'); break; }
     case 'value': { if (!v('v')) return; const m = mission(); if (m.values.length < 8) m.values.push(v('v')); save('mission'); break; }
@@ -4964,6 +5265,10 @@ $('appMain').addEventListener('submit', onAppSubmit);
 // Mood chips light up as you pick one (without re-rendering, so typed text stays put)
 function onAppChange(e) {
   if (e.target.dataset && e.target.dataset.photo && e.target.files && e.target.files[0]) { takeDailyPhoto(e.target.files[0], e.target.dataset.photo); return; }
+  if (e.target.dataset && e.target.dataset.face && e.target.files && e.target.files[0]) {
+    resizeToBlob(e.target.files[0], 200).then(pic => { const fc = faces(); fc[active] = pic.dataUrl; mem.faces = fc; save('faces'); renderApp(); appToast('Photo saved'); }).catch(() => appToast("That photo couldn't be read."));
+    return;
+  }
   if (e.target.name !== 'mood') return;
   e.target.closest('form').querySelectorAll('.moods .chip').forEach(l => l.classList.toggle('on', l.querySelector('input').checked));
 }
@@ -4994,7 +5299,8 @@ function greetTown() {
 }
 showSplash({ min: 2200, max: 4500, until: () => sync.ready || !sync.db || sync.status !== 'connecting', then: () => setTimeout(promptCheckin, 300) });
 loadLocalPics();
-if (!names) showNames();
+setTimeout(markDay, 2500);
+if (!store.get('introSeen', false)) { pendingIntro = true; store.cache('introSeen', true); }
 renderApp();
 startSync();
 startRoom();
